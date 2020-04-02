@@ -1,5 +1,5 @@
 import HTTP, CSV
-using Plots, DataFrames, Dates, PlotlyJS, Dashboards
+using DataFrames, Dates, PlotlyJS, Dashboards
 df = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
 
 states = sort!(unique(df.state))
