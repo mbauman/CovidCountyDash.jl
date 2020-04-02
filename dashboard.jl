@@ -85,4 +85,4 @@ callback!(plotit, app2, CallbackId([], [(Symbol(t,"-",n), :value) for n in 1:max
 
 
 handler = make_handler(app2, debug = true)
-HTTP.serve(handler, HTTP.Sockets.localhost, 8080)
+HTTP.serve(handler, HTTP.Sockets.localhost, parse(Int, length(ARGS) > 0 ? ARGS[1] : "8080"))
