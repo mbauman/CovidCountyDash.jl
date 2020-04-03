@@ -1,6 +1,9 @@
+@info "Launched"
 import HTTP, CSV
 using DataFrames, Dates, PlotlyJS, Dashboards, Sockets
+@info "Loaded"
 df = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
+@info "Downloaded"
 
 states = sort!(unique(df.state))
 max_lines = 4
@@ -39,6 +42,7 @@ function plotit(pp...)
         )
     )
 end
+@info "Defined"
 
 # The app itself:
 app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
@@ -83,6 +87,6 @@ for n in 1:max_lines
 end
 callback!(plotit, app2, CallbackId([], [(Symbol(t,"-",n), :value) for n in 1:max_lines for t in (:state, :county)], [(:theplot, :figure)]))
 
-
 handler = make_handler(app2, debug = true)
+@info "Setup and now serving..."
 HTTP.serve(handler, ip"0.0.0.0", parse(Int, length(ARGS) > 0 ? ARGS[1] : "8080"))
