@@ -4,6 +4,7 @@ using DataFrames, Dates, PlotlyBase, Dashboards, Sockets
 
 @info "Loaded"
 const df = Ref(DataFrame(state=[], county=[], cases=[], deaths=[]))
+@async df[] = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
 const max_lines = 4
 
 # utilities to compute the cases by day, subseted and aligned
@@ -50,7 +51,7 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
                textAlign = "center",
             )
         ),
-        dcc_interval(id="loader", interval=1,max_intervals=1),
+        dcc_interval(id="loader", interval=1000, max_intervals=-1),
         html_a("Source data (loading...)", id="source_link", href="https://github.com/nytimes/covid-19-data",
             style=(
                textAlign = "center",
@@ -86,15 +87,10 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
 end
 @info "Prepared"
 
-callback!(app2, CallbackId([], [(:loader,:n_intervals)], [[(Symbol(:state,"-",n), :options) for n in 1:max_lines]; (:source_link, :children)])) do n
-    n === nothing && return [[[] for i in 1:max_lines]; "Source data (loading...)"]
-    if isempty(df[])
-        @info "Downloading..."
-        df[] = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
-        @info "Downloaded"
-    end
+callback!(app2, CallbackId([], [(:loader,:n_intervals)], [[(Symbol(:state,"-",n), :options) for n in 1:max_lines]; (:source_link, :children); (:loader,:max_intervals)])) do n
+    isempty(df[]) && return [[[] for i in 1:max_lines]; "Source data (loading...)"; -1]
     states = sort!(unique(df[].state))
-    return [[[(label=s, value=s) for s in states] for i in 1:4]; "Source data (loaded data through $(maximum(df[].date)))"]
+    return [[[(label=s, value=s) for s in states] for i in 1:max_lines]; "Source data (loaded data through $(maximum(df[].date)))"; 0]
 end
 for n in 1:max_lines
     callback!(counties, app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :options)]))
