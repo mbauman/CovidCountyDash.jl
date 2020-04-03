@@ -24,22 +24,22 @@ counties(state::String) = [(label=c, value=c) for c in sort!(unique(df[df.state 
 # put together the plot given a sequence of alternating state/county pairs
 function plotit(pp...)
     data = reduce(vcat, [precompute(df, state, county) for (state, county) in Iterators.partition(pp, 2)])
-    return PlotlyJS.Plot(PlotlyJS.scatter(data,
-            x = :days,
-            y = :cases,
-            group = :location,
-            mode = "lines+markers",
-            marker_size = 5,
-            marker_line_width = 2,
-            marker_opacity = 0.6
-        ), Layout(
+    return PlotlyJS.Plot(data,
+        Layout(
             xaxis_title = "Days since 10 cases",
             yaxis_title = "Number of cases",
             hovermode = "closest",
             title = "Cases",
             height = "40%",
             yaxis_type="log"
-        )
+        ),
+        x = :days,
+        y = :cases,
+        group = :location,
+        mode = "lines+markers",
+        marker_size = 5,
+        marker_line_width = 2,
+        marker_opacity = 0.6
     )
 end
 @info "Defined"
