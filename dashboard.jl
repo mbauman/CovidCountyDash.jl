@@ -26,10 +26,10 @@ function plotit(ytransform, type, alignment, pp...)
     data = reduce(vcat, [precompute(df[], state, county, type=Symbol(type), alignment=alignment) for (state, county) in Iterators.partition(pp, 2)])
     return Plot(data,
         Layout(
-            xaxis_title = "Days since $alignment $(type)s",
-            yaxis_title = "Number of $(type)s",
+            xaxis_title = "Days since $alignment $(type)",
+            yaxis_title = "Number of $(type)",
             hovermode = "closest",
-            title = "",
+            title = uppercasefirst(type),
             height = "40%",
             yaxis_type= ytransform,
         ),
@@ -76,9 +76,11 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
                     ]
                 )
             end,
+            html_b("Options"),
             dcc_radioitems(id="type", options=[(label="Confirmed positive cases", value="cases"), (label="Confirmed deaths", value="deaths")], value="cases"),
             "Align on:",
             dcc_input(id="alignment", type="number", placeholder="alignment",min=1, max=10000, step=1, value=10),
+            html_br(),
             "Y-axis transformation:",
             dcc_radioitems(id="ytransform", options=[(label="Logarithmic", value="log"), (label="Linear", value="linear")], value="log"),
             html_div(style = (width="80%", display="block", padding="2% 10%")) do
