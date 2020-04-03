@@ -8,14 +8,16 @@ const df = Ref(DataFrame(state=[], county=[], cases=[], deaths=[]))
 const max_lines = 4
 
 # utilities to compute the cases by day, subseted and aligned
-precompute(df, state, county; kwargs...) = DataFrame(days=Int[0],cases=Int[1],location=String[""])
-function precompute(df, state::String, county::String; alignment = 10, type=:cases)
-    subdf = df[(df.county .== county) .& (df.state .== state), :]
+subset(df, state, county) = df[(df.county .== county) .& (df.state .== state), :]
+subset(df, state, county::Nothing) = by(df[df.state .== state, :], :date, cases=:cases=>sum, deaths=:deaths=>sum)
+precompute(df, ::Nothing, ::Nothing; kwargs...) = DataFrame(days=Int[0],cases=Int[1],location=String[""])
+function precompute(df, state, county; alignment = 10, type=:cases)
+    subdf = subset(df, state, county)
     vals = subdf[:, type]
     dates = subdf[:, :date]
     idx = findfirst(vals .>= alignment)
     idx === nothing && return precompute(df, nothing, nothing)
-    return DataFrame(days=(x->x.value).(dates .- dates[idx]),cases=vals, location="$county, $state")
+    return DataFrame(days=(x->x.value).(dates .- dates[idx]),cases=vals, location=county===nothing ? state : "$county, $state")
 end
 # Given a state, list its counties
 counties(state) = NamedTuple{(:label, :value),Tuple{String,String}}[]
