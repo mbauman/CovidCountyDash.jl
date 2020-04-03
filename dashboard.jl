@@ -10,14 +10,14 @@ const max_lines = 4
 # utilities to compute the cases by day, subseted and aligned
 subset(df, state, county) = df[(df.county .== county) .& (df.state .== state), :]
 subset(df, state, county::Nothing) = by(df[df.state .== state, :], :date, cases=:cases=>sum, deaths=:deaths=>sum)
-precompute(df, ::Nothing, ::Nothing; kwargs...) = DataFrame(days=Int[0],cases=Int[1],location=String[""])
+precompute(df, ::Nothing, ::Nothing; kwargs...) = DataFrame(days=Int[0],values=Int[1],location=String[""])
 function precompute(df, state, county; alignment = 10, type=:cases)
     subdf = subset(df, state, county)
     vals = subdf[:, type]
     dates = subdf[:, :date]
     idx = findfirst(vals .>= alignment)
     idx === nothing && return precompute(df, nothing, nothing)
-    return DataFrame(days=(x->x.value).(dates .- dates[idx]),cases=vals, location=county===nothing ? state : "$county, $state")
+    return DataFrame(days=(x->x.value).(dates .- dates[idx]),values=vals, location=county===nothing ? state : "$county, $state")
 end
 # Given a state, list its counties
 counties(state) = NamedTuple{(:label, :value),Tuple{String,String}}[]
@@ -30,13 +30,14 @@ function plotit(ytransform, type, alignment, pp...)
         Layout(
             xaxis_title = "Days since $alignment $(type)",
             yaxis_title = "Number of $(type)",
+            xaxis = Dict(:range=>[-1, ceil(maximum(data.days)/5)*5]),
             hovermode = "closest",
             title = uppercasefirst(type),
             height = "40%",
             yaxis_type= ytransform,
         ),
         x = :days,
-        y = :cases,
+        y = :values,
         group = :location,
         mode = "lines+markers",
         marker_size = 5,
