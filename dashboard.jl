@@ -1,6 +1,6 @@
 @info "Launched"
 import HTTP, CSV
-using DataFrames, Dates, PlotlyJS, Dashboards, Sockets
+using DataFrames, Dates, PlotlyBase, Dashboards, Sockets
 @info "Loaded"
 df = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
 @info "Downloaded"
@@ -24,7 +24,7 @@ counties(state::String) = [(label=c, value=c) for c in sort!(unique(df[df.state 
 # put together the plot given a sequence of alternating state/county pairs
 function plotit(pp...)
     data = reduce(vcat, [precompute(df, state, county) for (state, county) in Iterators.partition(pp, 2)])
-    return PlotlyJS.Plot(data,
+    return Plot(data,
         Layout(
             xaxis_title = "Days since 10 cases",
             yaxis_title = "Number of cases",
@@ -43,8 +43,6 @@ function plotit(pp...)
     )
 end
 @info "Defined"
-sqrt(2)
-@info "Rooted"
 # The app itself:
 app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
     html_div() do
