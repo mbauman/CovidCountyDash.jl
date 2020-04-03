@@ -1,12 +1,10 @@
 @info "Launched"
 import HTTP, CSV
 using DataFrames, Dates, PlotlyBase, Dashboards, Sockets
-@info "Loaded"
-df = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
-@info "Downloaded"
 
-states = sort!(unique(df.state))
-max_lines = 4
+@info "Loaded"
+const df = Ref(DataFrame(state=[], county=[], cases=[], deaths=[]))
+const max_lines = 4
 
 # utilities to compute the cases by day, subseted and aligned
 precompute(df, state, county; kwargs...) = DataFrame(days=Int[0],cases=Int[1],location=String[""])
@@ -20,10 +18,10 @@ function precompute(df, state::String, county::String; alignment = 10, type=:cas
 end
 # Given a state, list its counties
 counties(state) = NamedTuple{(:label, :value),Tuple{String,String}}[]
-counties(state::String) = [(label=c, value=c) for c in sort!(unique(df[df.state .== state, :].county))]
+counties(state::String) = [(label=c, value=c) for c in sort!(unique(df[][df[].state .== state, :].county))]
 # put together the plot given a sequence of alternating state/county pairs
 function plotit(pp...)
-    data = reduce(vcat, [precompute(df, state, county) for (state, county) in Iterators.partition(pp, 2)])
+    data = reduce(vcat, [precompute(df[], state, county) for (state, county) in Iterators.partition(pp, 2)])
     return Plot(data,
         Layout(
             xaxis_title = "Days since 10 cases",
@@ -52,6 +50,13 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
                textAlign = "center",
             )
         ),
+        dcc_interval(id="loader", interval=1,max_intervals=1),
+        html_a("Source data (loading...)", id="source_link", href="https://github.com/nytimes/covid-19-data",
+            style=(
+               textAlign = "center",
+               display = "block",
+            )
+        ),
         html_div(style = (width="80%", display="block", padding="2% 10%")) do
             [html_table(style=(width="100%",)) do
                 vcat(
@@ -60,7 +65,7 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
                     [
                         html_tr() do
                             html_td(style=(width="40%",)) do
-                                dcc_dropdown(id="state-$n", options=[(label=s, value=s) for s in states])
+                                dcc_dropdown(id="state-$n", options=[])
                             end,
                             html_td(style=(width="60%",)) do
                                 dcc_dropdown(id="county-$n", options=[])
@@ -72,7 +77,7 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
             html_div(style = (width="80%", display="block", padding="2% 10%")) do
                 dcc_graph(
                     id = "theplot",
-                    figure=plotit(nothing, nothing)
+                    figure=Plot()
                     )
             end
             ]
@@ -81,6 +86,16 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
 end
 @info "Prepared"
 
+callback!(app2, CallbackId([], [(:loader,:n_intervals)], [[(Symbol(:state,"-",n), :options) for n in 1:max_lines]; (:source_link, :children)])) do n
+    n === nothing && return [[[] for i in 1:max_lines]; "Source data (loading...)"]
+    if isempty(df[])
+        @info "Downloading..."
+        df[] = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
+        @info "Downloaded"
+    end
+    states = sort!(unique(df[].state))
+    return [[[(label=s, value=s) for s in states] for i in 1:4]; "Source data (loaded data through $(maximum(df[].date)))"]
+end
 for n in 1:max_lines
     callback!(counties, app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :options)]))
 end

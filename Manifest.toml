@@ -23,7 +23,9 @@ version = "3.8.0"
 
 [[Dashboards]]
 deps = ["DataStructures", "HTTP", "JSON", "JSON2", "LibGit2", "MacroTools", "PlotlyBase", "Test"]
-git-tree-sha1 = "40f9cbaa886d95bebd5efca92a2c052f4f7b5393"
+git-tree-sha1 = "d600b5bbd7239ee0de2d3ad18aeeae00bd19cb94"
+repo-rev = "master"
+repo-url = "https://github.com/waralex/Dashboards.jl.git"
 uuid = "9024f26f-ba4d-4e0a-965a-ad5b1da667aa"
 version = "0.2.8"
 
