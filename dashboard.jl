@@ -43,7 +43,8 @@ function plotit(pp...)
     )
 end
 @info "Defined"
-
+plotit(nothing, nothing)
+@info "Plotted"
 # The app itself:
 app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
     html_div() do
@@ -80,12 +81,13 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
         end
     end
 end
-
+@info "Prepared"
 
 for n in 1:max_lines
     callback!(counties, app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :options)]))
 end
 callback!(plotit, app2, CallbackId([], [(Symbol(t,"-",n), :value) for n in 1:max_lines for t in (:state, :county)], [(:theplot, :figure)]))
+@info "Hollared back at"
 
 handler = make_handler(app2, debug = true)
 @info "Setup and now serving..."
