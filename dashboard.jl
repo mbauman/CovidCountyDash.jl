@@ -1,5 +1,5 @@
 import HTTP, CSV
-using DataFrames, Dates, PlotlyJS, Dashboards
+using DataFrames, Dates, PlotlyJS, Dashboards, Sockets
 df = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
 
 states = sort!(unique(df.state))
@@ -85,4 +85,4 @@ callback!(plotit, app2, CallbackId([], [(Symbol(t,"-",n), :value) for n in 1:max
 
 
 handler = make_handler(app2, debug = true)
-HTTP.serve(handler, HTTP.Sockets.localhost, parse(Int, length(ARGS) > 0 ? ARGS[1] : "8080"))
+HTTP.serve(handler, ip"0.0.0.0", parse(Int, length(ARGS) > 0 ? ARGS[1] : "8080"))
