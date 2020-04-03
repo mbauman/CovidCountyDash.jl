@@ -43,8 +43,8 @@ function plotit(pp...)
     )
 end
 @info "Defined"
-plotit(nothing, nothing)
-@info "Plotted"
+sqrt(2)
+@info "Rooted"
 # The app itself:
 app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
     html_div() do
