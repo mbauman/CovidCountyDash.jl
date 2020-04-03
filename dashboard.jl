@@ -21,16 +21,17 @@ end
 counties(state) = NamedTuple{(:label, :value),Tuple{String,String}}[]
 counties(state::String) = [(label=c, value=c) for c in sort!(unique(df[][df[].state .== state, :].county))]
 # put together the plot given a sequence of alternating state/county pairs
-function plotit(pp...)
-    data = reduce(vcat, [precompute(df[], state, county) for (state, county) in Iterators.partition(pp, 2)])
+function plotit(ytransform, type, alignment, pp...)
+    alignment = something(alignment, 10)
+    data = reduce(vcat, [precompute(df[], state, county, type=Symbol(type), alignment=alignment) for (state, county) in Iterators.partition(pp, 2)])
     return Plot(data,
         Layout(
-            xaxis_title = "Days since 10 cases",
-            yaxis_title = "Number of cases",
+            xaxis_title = "Days since $alignment $(type)s",
+            yaxis_title = "Number of $(type)s",
             hovermode = "closest",
-            title = "Cases",
+            title = "",
             height = "40%",
-            yaxis_type="log"
+            yaxis_type= ytransform,
         ),
         x = :days,
         y = :cases,
@@ -38,7 +39,7 @@ function plotit(pp...)
         mode = "lines+markers",
         marker_size = 5,
         marker_line_width = 2,
-        marker_opacity = 0.6
+        marker_opacity = 0.6,
     )
 end
 @info "Defined"
@@ -75,6 +76,11 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
                     ]
                 )
             end,
+            dcc_radioitems(id="type", options=[(label="Confirmed positive cases", value="cases"), (label="Confirmed deaths", value="deaths")], value="cases"),
+            "Align on:",
+            dcc_input(id="alignment", type="number", placeholder="alignment",min=1, max=10000, step=1, value=10),
+            "Y-axis transformation:",
+            dcc_radioitems(id="ytransform", options=[(label="Logarithmic", value="log"), (label="Linear", value="linear")], value="log"),
             html_div(style = (width="80%", display="block", padding="2% 10%")) do
                 dcc_graph(
                     id = "theplot",
@@ -82,7 +88,13 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️") do
                     )
             end
             ]
-        end
+        end,
+        html_a("Code source (Julia + Plotly Dash + Dashboards.jl)", href="https://github.com/mbauman/covid19",
+            style=(
+               textAlign = "center",
+               display = "block",
+            )
+        )
     end
 end
 @info "Prepared"
@@ -95,7 +107,7 @@ end
 for n in 1:max_lines
     callback!(counties, app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :options)]))
 end
-callback!(plotit, app2, CallbackId([], [(Symbol(t,"-",n), :value) for n in 1:max_lines for t in (:state, :county)], [(:theplot, :figure)]))
+callback!(plotit, app2, CallbackId([], [(:ytransform, :value); (:type, :value); (:alignment, :value); [(Symbol(t,"-",n), :value) for n in 1:max_lines for t in (:state, :county)]], [(:theplot, :figure)]))
 @info "Hollared back at"
 
 handler = make_handler(app2, debug = true)
