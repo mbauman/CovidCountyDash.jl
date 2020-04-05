@@ -10,36 +10,35 @@ const max_lines = 5
 # utilities to compute the cases by day, subseted and aligned
 subset(df, state, county) = df[(df.county .== county) .& (df.state .== state), :]
 subset(df, state, county::Nothing) = by(df[df.state .== state, :], :date, cases=:cases=>sum, deaths=:deaths=>sum)
-precompute(df, ::Nothing, ::Nothing; kwargs...) = DataFrame(days=Int[],values=Int[],dates=Date[],location=String[])
+precompute(df, ::Nothing, ::Nothing; kwargs...) = DataFrame(days=Int[],values=Int[],diff=Int[],dates=Date[],location=String[])
 function precompute(df, state, county; alignment = 10, type=:cases)
     subdf = subset(df, state, county)
     vals = subdf[:, type]
     dates = subdf[:, :date]
     idx = findfirst(vals .>= alignment)
     idx === nothing && return precompute(df, nothing, nothing)
-    return DataFrame(days=(x->x.value).(dates .- dates[idx]),values=vals, dates = dates, location=county===nothing ? state : "$county, $state")
+    return DataFrame(days=(x->x.value).(dates .- dates[idx]),values=vals, dates = dates, diff = [missing; diff(vals)], location=county===nothing ? state : "$county, $state")
 end
 # Given a state, list its counties
 counties(state) = NamedTuple{(:label, :value),Tuple{String,String}}[]
 counties(state::String) = [(label=c, value=c) for c in sort!(unique(df[][df[].state .== state, :].county))]
 # put together the plot given a sequence of alternating state/county pairs
-function plotit(ytransform, type, align_or_timeline, alignment, pp...)
-    align = align_or_timeline == "align"
+function plotit(value, logy, type, realign, alignment, pp...)
     alignment = something(alignment, 10)
     data = reduce(vcat, [precompute(df[], state, county, type=Symbol(type), alignment=alignment) for (state, county) in Iterators.partition(pp, 2)])
     isempty(data) && return Plot()
     return Plot(data,
         Layout(
-            xaxis_title = align ? "Days since $alignment $(type)" : "Date",
-            yaxis_title = "Number of $(type)",
-            xaxis = align ? Dict(:range=>[-1, ceil(maximum(data.days)/5)*5]) : Dict(),
+            xaxis_title = realign ? "Days since $alignment total $(type)" : "Date",
+            yaxis_title = "Number of $(value == "values" ? "total" : "new daily") $(type)",
+            xaxis = realign ? Dict(:range=>[-1, ceil(maximum(data.days)/5)*5]) : Dict(),
             hovermode = "closest",
             title = uppercasefirst(type),
             height = "40%",
-            yaxis_type= ytransform,
+            yaxis_type= logy ? "log" : "linear",
         ),
-        x = align ? :days : :dates,
-        y = :values,
+        x = realign ? :days : :dates,
+        y = Symbol(value),
         text = :dates,
         group = :location,
         hovertemplate = "%{text}: %{y}",
@@ -71,16 +70,17 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️", external_stylesheets=["ht
                 html_b("Options"),
                 dbc_radioitems(id="type", options=[(label="Confirmed positive cases", value="cases"), (label="Confirmed deaths", value="deaths")], value="cases"),
                 html_hr(style=(margin=".25em",)),
-                dbc_radioitems(id="align_or_time", options=[(label="No alignment", value="timeline"), (label="Align by initial value", value="align"), ], value="align"),
+                dbc_radioitems(id="values", options=[(label="Cumulative", value="values"), (label="New daily cases", value="diff")], value="values"),
+                html_hr(style=(margin=".25em",)),
+                dbc_checkbox(id="realign", checked=true, style=(margin="0 .5em 0 .1em",)), "Realign by initial value", 
                 html_div(id="alignment_selector", style=(visibility="visible", height="auto")) do
-                    "Align on",
-                    dcc_input(id="alignment", type="number", placeholder="alignment",min=1, max=10000, step=1, value=10, style=(margin="0 1em 0 1em",)),
+                    html_span("Align on", style=(var"padding-left"="1.5em",)),
+                    dcc_input(id="alignment", type="number", placeholder="alignment",min=1, max=10000, step=1, value=10, style=(margin="0 .5em 0 .5em",)),
+                    html_span("total "),
                     html_span("cases", id="cases_or_deaths")
                 end,
                 html_br(),
-                html_hr(style=(margin=".25em",)),
-                "Y-axis transformation:",
-                dbc_radioitems(id="ytransform", options=[(label="Logarithmic", value="log"), (label="Linear", value="linear")], value="log")
+                dbc_checkbox(id="logy", checked=true, style=(margin="0 .5em 0 .1em",)), "Use logarithmic y-axis"
             end
         end,
         html_div(dcc_graph(id = "theplot", figure=Plot()), style = (width="80%", display="block", margin="auto")),
@@ -99,10 +99,13 @@ end
 for n in 1:max_lines
     callback!(counties, app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :options)]))
 end
-callback!(plotit, app2, CallbackId([], [(:ytransform, :value); (:type, :value); (:align_or_time, :value); (:alignment, :value); [(Symbol(t,"-",n), :value) for n in 1:max_lines for t in (:state, :county)]], [(:theplot, :figure)]))
+callback!(plotit, app2, CallbackId([], [(:values, :value); (:logy, :checked); (:type, :value); (:realign, :checked); (:alignment, :value); [(Symbol(t,"-",n), :value) for n in 1:max_lines for t in (:state, :county)]], [(:theplot, :figure)]))
 callback!(identity, app2, callid"type.value => cases_or_deaths.children")
-callback!(app2, callid"align_or_time.value => alignment_selector.style") do val
-    if val == "align"
+callback!(app2, callid"type.value => values.options") do type
+    return [(label="Cumulative", value="values"), (label="New daily $(type)", value="diff")]
+end
+callback!(app2, callid"realign.checked => alignment_selector.style") do realign
+    if realign
         return (visibility="visible", height="auto")
     else
         return (visibility="hidden", height="0")
