@@ -51,12 +51,19 @@ function plotit(value, logy, type, realign, alignment, pp...)
 end
 @info "Defined"
 # The app itself:
-app2 = Dash("🦠 COVID-19 Tracked by County 🗺️", external_stylesheets=["https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"]) do
+app2 = Dash("🦠 COVID-19 Tracked by US County", external_stylesheets=["https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"]) do
     html_div(style=(padding="2%",)) do
         dcc_interval(id="loader", interval=1000, max_intervals=-1),
-        html_h1("🦠 COVID-19 Tracked by County 🗺️", style=(textAlign = "center",)),
-        html_a("Source data (loading...)", id="source_link", href="https://github.com/nytimes/covid-19-data",
-            style=(textAlign = "center", display = "block",)),
+        html_h1("🦠 COVID-19 Tracked by US County", style=(textAlign = "center",)),
+        html_div(
+            ["Visualization of ",
+             html_a("data", href="https://github.com/nytimes/covid-19-data"),
+             " from ",
+             html_a("The New York Times", href="https://www.nytimes.com/interactive/2020/us/coronavirus-us-cases.html"),
+             ", based on reports from state and local health agencies",
+             html_div(dbc_spinner(), id="spinner")
+             ],
+            style=(width="60%",margin="auto", textAlign="center")),
         dbc_row() do
             dbc_col(width=8) do
                 html_table(style=(width="100%",)) do
@@ -91,10 +98,10 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️", external_stylesheets=["ht
 end
 @info "Prepared"
 
-callback!(app2, CallbackId([], [(:loader,:n_intervals)], [[(Symbol(:state,"-",n), :options) for n in 1:max_lines]; (:source_link, :children); (:loader,:max_intervals)])) do n
-    isempty(df[]) && return [[[] for i in 1:max_lines]; "Source data (loading...)"; -1]
+callback!(app2, CallbackId([], [(:loader,:n_intervals)], [[(Symbol(:state,"-",n), :options) for n in 1:max_lines]; (:spinner, :children); (:loader,:max_intervals)])) do n
+    isempty(df[]) && return [fill([], max_lines); dbc_spinner(); -1]
     states = sort!(unique(df[].state))
-    return [[[(label=s, value=s) for s in states] for i in 1:max_lines]; "Source data (loaded data through $(maximum(df[].date)))"; 0]
+    return [fill([(label=s, value=s) for s in states], max_lines); html_p("Loaded data through $(Dates.format(maximum(df[].date), "U d"))", style=(height="2rem", lineHeight="2rem",margin="0")); 0]
 end
 hide_missing_row(::Nothing, ::Nothing) = (display="none",)
 hide_missing_row(_, _) = (display="table-row",)
