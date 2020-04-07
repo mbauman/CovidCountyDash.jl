@@ -72,15 +72,14 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️", external_stylesheets=["ht
                 html_hr(style=(margin=".25em",)),
                 dbc_radioitems(id="values", options=[(label="Cumulative", value="values"), (label="New daily cases", value="diff")], value="values"),
                 html_hr(style=(margin=".25em",)),
-                dbc_checkbox(id="realign", checked=true, style=(margin="0 .5em 0 .1em",)), "Realign by initial value", 
-                html_div(id="alignment_selector", style=(visibility="visible", height="auto")) do
+                html_div(html_label((dbc_checkbox(id="realign", checked=true, style=(margin="0 .5em 0 .1em",)), "Realign by initial value"))),
+                html_div(id="alignment_selector", style=(visibility="visible", display="block")) do
                     html_span("Align on", style=(var"padding-left"="1.5em",)),
                     dcc_input(id="alignment", type="number", placeholder="alignment",min=1, max=10000, step=1, value=10, style=(margin="0 .5em 0 .5em",)),
                     html_span("total "),
                     html_span("cases", id="cases_or_deaths")
                 end,
-                html_br(),
-                dbc_checkbox(id="logy", checked=true, style=(margin="0 .5em 0 .1em",)), "Use logarithmic y-axis"
+                html_label((dbc_checkbox(id="logy", checked=true, style=(margin="0 .5em 0 .1em",)), "Use logarithmic y-axis"))
             end
         end,
         html_div(dcc_graph(id = "theplot", figure=Plot()), style = (width="80%", display="block", margin="auto")),
@@ -106,9 +105,9 @@ callback!(app2, callid"type.value => values.options") do type
 end
 callback!(app2, callid"realign.checked => alignment_selector.style") do realign
     if realign
-        return (visibility="visible", height="auto")
+        return (visibility="visible", display="block")
     else
-        return (visibility="hidden", height="0")
+        return (visibility="hidden", display="none")
     end
 end
 @info "Hollared back at"
