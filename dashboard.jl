@@ -5,7 +5,7 @@ using DataFrames, Dates, PlotlyBase, Dashboards, Sockets
 @info "Loaded"
 const df = Ref(DataFrame(state=[], county=[], cases=[], deaths=[]))
 @async df[] = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
-const max_lines = 5
+const max_lines = 6
 
 # utilities to compute the cases by day, subseted and aligned
 subset(df, state, county) = df[(df.county .== county) .& (df.state .== state), :]
@@ -21,25 +21,26 @@ function precompute(df, state, county; alignment = 10, type=:cases)
 end
 # Given a state, list its counties
 counties(state) = NamedTuple{(:label, :value),Tuple{String,String}}[]
-counties(state::String) = [(label=c, value=c) for c in sort!(unique(df[][df[].state .== state, :].county))]
+counties(state::String) = [(label=c, value=c) for c in sort!(unique(df[][df[].state .== state, :county]))]
 # put together the plot given a sequence of alternating state/county pairs
 function plotit(value, logy, type, realign, alignment, pp...)
     alignment = something(alignment, 10)
     data = reduce(vcat, [precompute(df[], state, county, type=Symbol(type), alignment=alignment) for (state, county) in Iterators.partition(pp, 2)])
-    isempty(data) && return Plot()
-    return Plot(data,
-        Layout(
+    data.text = Dates.format.(data.dates, "U d")
+    layout = Layout(
             xaxis_title = realign ? "Days since $alignment total $(type)" : "Date",
             yaxis_title = "Number of $(value == "values" ? "total" : "new daily") $(type)",
-            xaxis = realign ? Dict(:range=>[-1, ceil(maximum(data.days)/5)*5]) : Dict(),
+            xaxis = realign && !isempty(data) ? Dict(:range=>[-1, ceil(maximum(data.days)/5)*5]) : Dict(),
             hovermode = "closest",
-            title = uppercasefirst(type),
+            title = string(value == "values" ? "Total " : "Daily " , "Confirmed ", uppercasefirst(type)),
             height = "40%",
             yaxis_type= logy ? "log" : "linear",
-        ),
+        )
+    isempty(data) && return Plot(data, layout)
+    return Plot(data, layout,
         x = realign ? :days : :dates,
         y = Symbol(value),
-        text = :dates,
+        text = :text,
         group = :location,
         hovertemplate = "%{text}: %{y}",
         mode = "lines+markers",
@@ -62,7 +63,7 @@ app2 = Dash("🦠 COVID-19 Tracked by County 🗺️", external_stylesheets=["ht
                     vcat(html_tr([html_th("State",style=(width="40%",)),
                                   html_th("County",style=(width="60%",))]),
                          [html_tr([html_td(dcc_dropdown(id="state-$n", options=[]), style=(width="40%",)),
-                                  html_td(dcc_dropdown(id="county-$n", options=[]), style=(width="60%",))])
+                                  html_td(dcc_dropdown(id="county-$n", options=[]), style=(width="60%",))], id="scrow-$n")
                           for n in 1:max_lines])
                 end
             end,
@@ -95,6 +96,11 @@ callback!(app2, CallbackId([], [(:loader,:n_intervals)], [[(Symbol(:state,"-",n)
     states = sort!(unique(df[].state))
     return [[[(label=s, value=s) for s in states] for i in 1:max_lines]; "Source data (loaded data through $(maximum(df[].date)))"; 0]
 end
+hide_missing_row(::Nothing, ::Nothing) = (display="none",)
+hide_missing_row(_, _) = (display="table-row",)
+for n in 2:max_lines
+    callback!(hide_missing_row, app2, CallbackId([], [(Symbol(:state,"-",n), :value), (Symbol(:state,"-",n-1), :value)], [(Symbol(:scrow,"-",n), :style)]))
+end
 for n in 1:max_lines
     callback!(counties, app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :options)]))
 end
@@ -105,6 +111,13 @@ callback!(app2, callid"type.value => values.options") do type
 end
 callback!(app2, callid"realign.checked => alignment_selector.style") do realign
     if realign
+        return (visibility="visible", display="block")
+    else
+        return (visibility="hidden", display="none")
+    end
+end
+callback!(app2, callid"values.value => smoothing_selector.style") do value
+    if value == "diff"
         return (visibility="visible", display="block")
     else
         return (visibility="hidden", display="none")
