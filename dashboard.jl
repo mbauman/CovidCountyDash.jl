@@ -110,6 +110,7 @@ for n in 2:max_lines
 end
 for n in 1:max_lines
     callback!(counties, app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :options)]))
+    callback!(x->nothing, app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :value)]))
 end
 callback!(plotit, app2, CallbackId([], [(:values, :value); (:logy, :checked); (:type, :value); (:realign, :checked); (:alignment, :value); [(Symbol(t,"-",n), :value) for n in 1:max_lines for t in (:state, :county)]], [(:theplot, :figure)]))
 callback!(identity, app2, callid"type.value => cases_or_deaths.children")
