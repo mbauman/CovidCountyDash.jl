@@ -4,6 +4,7 @@ using DataFrames, Dates, PlotlyBase, Dashboards, Sockets, Statistics
 
 @info "Loaded"
 const df = Ref(DataFrame(state=[], county=[], cases=[], deaths=[]))
+# This is @async simply because we have to get going within 60 secs and the Heroku-Github connection is _slow_
 @async df[] = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
 const max_lines = 6
 
@@ -30,15 +31,15 @@ function plotit(value, logy, type, realign, alignment, roll, pp...)
     data = reduce(vcat, [precompute(df[], state, county, type=Symbol(type), alignment=alignment, roll=roll) for (state, county) in Iterators.partition(pp, 2)])
     data.text = Dates.format.(data.dates, "U d")
     layout = Layout(
-            xaxis_title = realign ? "Days since $alignment total $(type)" : "Date",
-            yaxis_title = value == "values" ? "Total confirmed $type" :
-                          roll > 1 ? "Average daily $type (rolling $roll-day mean)" : "Number of daily $type",
-            xaxis = realign && !isempty(data) ? Dict(:range=>[-1, ceil(maximum(data.days)/5)*5]) : Dict(),
-            hovermode = "closest",
-            title = string(value == "values" ? "Total " : "Daily " , "Confirmed ", uppercasefirst(type)),
-            height = "40%",
-            yaxis_type= logy ? "log" : "linear",
-        )
+        xaxis_title = realign ? "Days since $alignment total $(type)" : "Date",
+        yaxis_title = value == "values" ? "Total confirmed $type" :
+                      roll > 1 ? "Average daily $type (rolling $roll-day mean)" : "Number of daily $type",
+        xaxis = realign && !isempty(data) ? Dict(:range=>[-1, ceil(maximum(data.days)/5)*5]) : Dict(),
+        hovermode = "closest",
+        title = string(value == "values" ? "Total " : "Daily " , "Confirmed ", uppercasefirst(type)),
+        height = "40%",
+        yaxis_type= logy ? "log" : "linear",
+    )
     isempty(data) && return Plot(data, layout)
     return Plot(data, layout,
         x = realign ? :days : :dates,
@@ -53,56 +54,60 @@ function plotit(value, logy, type, realign, alignment, roll, pp...)
     )
 end
 @info "Defined"
+
 # The app itself:
 app2 = Dash("🦠 COVID-19 Tracked by US County", external_stylesheets=["https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"]) do
-    html_div(style=(padding="2%",)) do
+    html_div(style=(padding="2%",), [
         dcc_interval(id="loader", interval=1000, max_intervals=-1),
         html_h1("🦠 COVID-19 Tracked by US County", style=(textAlign = "center",)),
-        html_div(
-            ["Visualization of ",
-             html_a("data", href="https://github.com/nytimes/covid-19-data"),
-             " from ",
-             html_a("The New York Times", href="https://www.nytimes.com/interactive/2020/us/coronavirus-us-cases.html"),
-             ", based on reports from state and local health agencies",
-             html_div(dbc_spinner(), id="spinner")
-             ],
-            style=(width="60%",margin="auto", textAlign="center")),
-        dbc_row() do
-            dbc_col(width=8) do
-                html_table(style=(width="100%",)) do
+        html_div(style=(width="60%",margin="auto", textAlign="center"), [
+            "Visualization of ",
+            html_a("data", href="https://github.com/nytimes/covid-19-data"),
+            " from ",
+            html_a("The New York Times", href="https://www.nytimes.com/interactive/2020/us/coronavirus-us-cases.html"),
+            ", based on reports from state and local health agencies; inspired by ",
+            html_a("John Burn-Murdoch's", href="https://twitter.com/jburnmurdoch"),
+            " ",
+            html_a("analyses", href="https://www.ft.com/coronavirus-latest"),
+            " of national-level data",
+            html_div(dbc_spinner(), id="spinner")
+            ]),
+        dbc_row([
+            dbc_col(width=8,
+                html_table(style=(width="100%",),
                     vcat(html_tr([html_th("State",style=(width="40%",)),
                                   html_th("County",style=(width="60%",))]),
                          [html_tr([html_td(dcc_dropdown(id="state-$n", options=[]), style=(width="40%",)),
                                   html_td(dcc_dropdown(id="county-$n", options=[]), style=(width="60%",))], id="scrow-$n")
                           for n in 1:max_lines])
-                end
-            end,
-            dbc_col(width=4) do
+                )
+            ),
+            dbc_col(width=4, [
                 html_b("Options"),
                 dbc_radioitems(id="type", options=[(label="Confirmed positive cases", value="cases"), (label="Confirmed deaths", value="deaths")], value="cases"),
                 html_hr(style=(margin=".25em",)),
                 dbc_radioitems(id="values", options=[(label="Cumulative", value="values"), (label="New daily cases", value="diff")], value="values"),
-                html_div(id="smoothing_selector", style=(visibility="visible", display="block")) do
+                html_div(id="smoothing_selector", style=(visibility="visible", display="block"), [
                     html_span("Rolling", style=(var"padding-left"="1.5em",)),
-                    dcc_input(id="roll", type="number", placeholder="alignment",min=1, max=10, step=1, value=1, style=(margin="0 .5em 0 .5em",)),
+                    dcc_input(id="roll", type="number", placeholder="alignment", min=1, max=10, step=1, value=1, style=(margin="0 .5em 0 .5em",)),
                     html_span("day mean")
-                end,
+                ]),
                 html_hr(style=(margin=".25em",)),
                 html_div(html_label((dbc_checkbox(id="realign", checked=true, style=(margin="0 .5em 0 .1em",)), "Realign by initial value"))),
-                html_div(id="alignment_selector", style=(visibility="visible", display="block")) do
+                html_div(id="alignment_selector", style=(visibility="visible", display="block"), [
                     html_span("Align on", style=(var"padding-left"="1.5em",)),
-                    dcc_input(id="alignment", type="number", placeholder="alignment",min=1, max=10000, step=1, value=10, style=(margin="0 .5em 0 .5em",)),
+                    dcc_input(id="alignment", type="number", placeholder="alignment", min=1, max=10000, step=1, value=10, style=(margin="0 .5em 0 .5em",)),
                     html_span("total "),
                     html_span("cases", id="cases_or_deaths")
-                end,
+                    ]),
                 html_label((dbc_checkbox(id="logy", checked=true, style=(margin="0 .5em 0 .1em",)), "Use logarithmic y-axis"))
-            end
-        end,
+            ])
+        ]),
         html_div(dcc_graph(id = "theplot", figure=Plot()), style = (width="80%", display="block", margin="auto")),
         html_br(),
         html_a("Code source (Julia + Plotly Dash + Dashboards.jl)", href="https://github.com/mbauman/covid19",
             style=(textAlign = "center", display = "block"))
-    end
+    ])
 end
 @info "Prepared"
 
