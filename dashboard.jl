@@ -46,7 +46,7 @@ function precompute(df, state, county; alignment = 10, type=:cases, roll=1, popn
     idx = findfirst(vals .>= alignment)
     crossing = idx !== nothing ? dates[idx] : maximum(dates) + Day(1)
     if popnorm
-        vals ./= subdf.pop
+        vals .*= 100 ./ subdf.pop
     end
     return DataFrame(days=(x->x.value).(dates .- crossing),values=vals, dates = dates, diff = [missing; rolling(mean, diff(vals), roll)], location=county===nothing ? state : "$county, $state")
 end
@@ -64,7 +64,7 @@ function plotit(value, logy, type, realign, alignment, roll, popnorm, pp...)
         yaxis_title = value == "values" ? "Total confirmed $type" :
                       roll > 1 ? "Average daily $type (rolling $roll-day mean)" : "Number of daily $type",
         xaxis = realign && !isempty(data) ? Dict(:range=>[-1, ceil(maximum(data.days)/5)*5]) : Dict(),
-        yaxis_tickformat = popnorm ? "%" : "",
+        yaxis_ticksuffix = popnorm ? "%" : "",
         hovermode = "closest",
         title = string(value == "values" ? "Total " : "Daily " , "Confirmed ", uppercasefirst(type)),
         height = "40%",
