@@ -131,14 +131,14 @@ app2 = Dash("🦠 COVID-19 Tracked by US County", external_stylesheets=["https:/
                 html_b("Options"),
                 dbc_radioitems(id="type", options=[(label="Confirmed positive cases", value="cases"), (label="Confirmed deaths", value="deaths")], value="cases"),
                 html_hr(style=(margin=".25em",)),
-                dbc_radioitems(id="values", options=[(label="Cumulative", value="values"), (label="New daily cases", value="diff")], value="values"),
+                dbc_radioitems(id="values", options=[(label="Cumulative", value="values"), (label="New daily cases", value="diff")], value="diff"),
                 html_div(id="smoothing_selector", style=(visibility="visible", display="block"), [
                     html_span("Rolling", style=(var"padding-left"="1.5em",)),
-                    dcc_input(id="roll", type="number", placeholder="alignment", min=1, max=10, step=1, value=1, style=(margin="0 .5em 0 .5em",)),
+                    dcc_input(id="roll", type="number", placeholder="alignment", min=1, max=10, step=1, value=7, style=(margin="0 .5em 0 .5em",)),
                     html_span("day mean")
                 ]),
                 html_hr(style=(margin=".25em",)),
-                html_div(html_label((dbc_checkbox(id="realign", checked=true, style=(margin="0 .5em 0 .1em",)), "Realign by initial value"))),
+                html_div(html_label((dbc_checkbox(id="realign", checked=false, style=(margin="0 .5em 0 .1em",)), "Realign by initial value"))),
                 html_div(id="alignment_selector", style=(visibility="visible", display="block"), [
                     html_span("Align on", style=(var"padding-left"="1.5em",)),
                     dcc_input(id="alignment", type="number", placeholder="alignment", min=1, max=10000, step=1, value=10, style=(margin="0 .5em 0 .5em",)),
@@ -147,7 +147,7 @@ app2 = Dash("🦠 COVID-19 Tracked by US County", external_stylesheets=["https:/
                     ]),
                 html_label((dbc_checkbox(id="popnorm", checked=false, style=(margin="0 .5em 0 .1em",)), "Normalize by population")),
                 html_br(),
-                html_label((dbc_checkbox(id="logy", checked=true, style=(margin="0 .5em 0 .1em",)), "Use logarithmic y-axis"))
+                html_label((dbc_checkbox(id="logy", checked=false, style=(margin="0 .5em 0 .1em",)), "Use logarithmic y-axis"))
             ])
         ]),
         html_div(dcc_graph(id = "theplot", figure=Plot()), style = (width="80%", display="block", margin="auto")),
