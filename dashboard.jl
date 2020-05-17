@@ -35,12 +35,15 @@ end
 const max_lines = 6
 
 # utilities to compute the cases by day, subseted and aligned
+isset(x) = x !== nothing && !isempty(x)
 rolling(f, v, n) = n == 1 ? v : [f(@view v[max(firstindex(v),i-n+1):i]) for i in eachindex(v)]
-subset(df, state, county) = df[(df.county .== county) .& (df.state .== state), :]
-subset(df, state, county::Nothing) = by(df[df.state .== state, :], :date, cases=:cases=>sum, deaths=:deaths=>sum, pop=:pop=>sum)
-precompute(df, ::Nothing, c; kwargs...) = DataFrame(days=Int[],values=Int[],diff=Int[],dates=Date[],location=String[])
-function precompute(df, state, county; alignment = 10, type=:cases, roll=1, popnorm=false)
-    subdf = subset(df, state, county)
+function subset(df, states, counties)
+    mask = isset(counties) ? (df.county .∈ (counties,)) .& (df.state .∈ (states,)) : df.state .∈ (states,)
+    return by(df[mask, :], :date, cases=:cases=>sum, deaths=:deaths=>sum, pop=:pop=>sum)
+end
+function precompute(df, states, counties; alignment = 10, type=:cases, roll=1, popnorm=false)
+    !isset(states) && return DataFrame(days=Int[],values=Int[],diff=Int[],dates=Date[],location=String[])
+    subdf = subset(df, states, counties)
     vals = float.(subdf[:, type])
     dates = subdf[:, :date]
     idx = findfirst(vals .>= alignment)
@@ -48,11 +51,23 @@ function precompute(df, state, county; alignment = 10, type=:cases, roll=1, popn
     if popnorm
         vals .*= 100 ./ subdf.pop
     end
-    return DataFrame(days=(x->x.value).(dates .- crossing),values=vals, dates = dates, diff = [missing; rolling(mean, diff(vals), roll)], location=county===nothing ? state : "$county, $state")
+    loc = !isset(counties) ?
+        (length(states) <= 2 ? join(states, " + ") : "$(states[1]) + $(length(states)-1) other states") :
+        (length(counties) <= 2 ? join(counties, " + ") * ", " * states[] :
+            "$(counties[1]), $(states[]) + $(length(counties)-1) other counties")
+    return DataFrame(days=(x->x.value).(dates .- crossing),values=vals, dates = dates, diff = [missing; rolling(mean, diff(vals), roll)], location=loc)
 end
 # Given a state, list its counties
-counties(state) = NamedTuple{(:label, :value),Tuple{String,String}}[]
-counties(state::String) = [(label=c, value=c) for c in sort!(unique(df[][df[].state .== state, :county]))]
+function counties(states)
+    !isset(states) && return NamedTuple{(:label, :value),Tuple{String,String}}[]
+    if length(states) == 1
+        [(label=c, value=c) for c in sort!(unique(df[][df[].state .== states[1], :county]))]
+    else
+        # We don't keep the state/county pairings straight so disable it
+        # [(label="$c, $s", value=c) for s in states for c in sort!(unique(df[][df[].state .== s, :county]))]
+        NamedTuple{(:label, :value),Tuple{String,String}}[]
+    end
+end
 # put together the plot given a sequence of alternating state/county pairs
 function plotit(value, logy, type, realign, alignment, roll, popnorm, pp...)
     alignment = something(alignment, 10)
@@ -107,8 +122,8 @@ app2 = Dash("🦠 COVID-19 Tracked by US County", external_stylesheets=["https:/
                 html_table(style=(width="100%",),
                     vcat(html_tr([html_th("State",style=(width="40%",)),
                                   html_th("County",style=(width="60%",))]),
-                         [html_tr([html_td(dcc_dropdown(id="state-$n", options=[]), style=(width="40%",)),
-                                  html_td(dcc_dropdown(id="county-$n", options=[]), style=(width="60%",))], id="scrow-$n")
+                         [html_tr([html_td(dcc_dropdown(id="state-$n", options=[], multi=true), style=(width="40%",)),
+                                  html_td(dcc_dropdown(id="county-$n", options=[], multi=true), style=(width="60%",))], id="scrow-$n")
                           for n in 1:max_lines])
                 )
             ),
@@ -148,8 +163,7 @@ callback!(app2, CallbackId([], [(:loader,:n_intervals)], [[(Symbol(:state,"-",n)
     states = sort!(unique(df[].state))
     return [fill([(label=s, value=s) for s in states], max_lines); html_p("Loaded data through $(Dates.format(maximum(df[].date), "U d"))", style=(height="2rem", lineHeight="2rem",margin="0")); 0]
 end
-hide_missing_row(::Nothing, ::Nothing) = (display="none",)
-hide_missing_row(_, _) = (display="table-row",)
+hide_missing_row(s, c) = !isset(s) && !isset(c) ? (display="none",) : (display="table-row",)
 for n in 2:max_lines
     callback!(hide_missing_row, app2, CallbackId([], [(Symbol(:state,"-",n), :value), (Symbol(:state,"-",n-1), :value)], [(Symbol(:scrow,"-",n), :style)]))
 end
