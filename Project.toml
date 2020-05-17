@@ -1,3 +1,6 @@
+name = "CovidCountyDash"
+uuid = "f1007755-935f-4a62-8579-eca30b85ba48"
+
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
 Dashboards = "9024f26f-ba4d-4e0a-965a-ad5b1da667aa"
