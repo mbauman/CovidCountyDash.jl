@@ -2,6 +2,8 @@
 import HTTP, CSV
 using DataFrames, Dates, PlotlyBase, Dashboards, Sockets, Statistics
 
+@nospecialize
+
 @info "Loaded"
 const df = Ref(DataFrame(state=[], county=[], cases=[], deaths=[], pop=[]))
 # This is @async simply because we have to get going within 60 secs and the Heroku-Github connection is _slow_
