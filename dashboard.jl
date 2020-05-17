@@ -84,6 +84,7 @@ function plotit(value, logy, type, realign, alignment, roll, popnorm, pp...)
         title = string(value == "values" ? "Total " : "Daily " , "Confirmed ", uppercasefirst(type)),
         height = "40%",
         yaxis_type= logy ? "log" : "linear",
+        margin=(l=220,),
     )
     isempty(data) && return Plot(data, layout)
     return Plot(data, layout,
