@@ -4,9 +4,9 @@ using DataFrames, Dates, PlotlyBase, Dashboards, Sockets, Statistics
 
 export download_and_preprocess, create_app, make_handler, HTTP, DataFrame, @ip_str
 
-function download_and_preprocess()
+function download_and_preprocess(popfile)
     d = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), normalizenames=true)
-    pop = CSV.read(joinpath(@__DIR__, "..", "data", "pop2019.csv"))
+    pop = CSV.read(popfile)
     dd = join(d, pop, on=:fips, kind=:left)
     # # New York City
     # All cases for the five boroughs of New York City (New York, Kings, Queens, Bronx and Richmond counties) are assigned to a single area called New York City.
@@ -99,9 +99,9 @@ function plotit(df, value, logy, type, realign, alignment, roll, popnorm, pp...)
 end
 
 function create_app(df;max_lines=6)
+    states = sort!(unique(df.state))
     app2 = Dash("🦠 COVID-19 Tracked by US County", external_stylesheets=["https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"]) do
         html_div(style=(padding="2%",), [
-            dcc_interval(id="loader", interval=1000, max_intervals=-1),
             html_h1("🦠 COVID-19 Tracked by US County", style=(textAlign = "center",)),
             html_div(style=(width="60%",margin="auto", textAlign="center"), [
                 "Visualization of ",
@@ -113,14 +113,15 @@ function create_app(df;max_lines=6)
                 " ",
                 html_a("analyses", href="https://www.ft.com/coronavirus-latest"),
                 " of national-level data",
-                html_div(dbc_spinner(), id="spinner")
+                html_p("Loaded data through $(Dates.format(maximum(df.date), "U d"))",
+                    style=(height="2rem", lineHeight="2rem",margin="0")),
                 ]),
             dbc_row([
                 dbc_col(width=8,
                     html_table(style=(width="100%",),
                         vcat(html_tr([html_th("State",style=(width="40%",)),
                                       html_th("County",style=(width="60%",))]),
-                             [html_tr([html_td(dcc_dropdown(id="state-$n", options=[], multi=true), style=(width="40%",)),
+                             [html_tr([html_td(dcc_dropdown(id="state-$n", options=[(label=s, value=s) for s in states], multi=true), style=(width="40%",)),
                                       html_td(dcc_dropdown(id="county-$n", options=[], multi=true), style=(width="60%",))], id="scrow-$n")
                               for n in 1:max_lines])
                     )
@@ -155,20 +156,15 @@ function create_app(df;max_lines=6)
         ])
     end
 
-    callback!(app2, CallbackId([], [(:loader,:n_intervals)], [[(Symbol(:state,"-",n), :options) for n in 1:max_lines]; (:spinner, :children); (:loader,:max_intervals)])) do n
-        isempty(df[]) && return [fill([], max_lines); dbc_spinner(); -1]
-        states = sort!(unique(df[].state))
-        return [fill([(label=s, value=s) for s in states], max_lines); html_p("Loaded data through $(Dates.format(maximum(df[].date), "U d"))", style=(height="2rem", lineHeight="2rem",margin="0")); 0]
-    end
     hide_missing_row(s, c) = !isset(s) && !isset(c) ? (display="none",) : (display="table-row",)
     for n in 2:max_lines
         callback!(hide_missing_row, app2, CallbackId([], [(Symbol(:state,"-",n), :value), (Symbol(:state,"-",n-1), :value)], [(Symbol(:scrow,"-",n), :style)]))
     end
     for n in 1:max_lines
-        callback!(x->counties(df[], x), app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :options)]))
+        callback!(x->counties(df, x), app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :options)]))
         callback!(x->nothing, app2, CallbackId([], [(Symbol(:state,"-",n), :value)], [(Symbol(:county,"-",n), :value)]))
     end
-    callback!((args...)->plotit(df[], args...), app2, CallbackId([], [(:values, :value); (:logy, :checked); (:type, :value); (:realign, :checked); (:alignment, :value); (:roll, :value); (:popnorm, :checked); [(Symbol(t,"-",n), :value) for n in 1:max_lines for t in (:state, :county)]], [(:theplot, :figure)]))
+    callback!((args...)->plotit(df, args...), app2, CallbackId([], [(:values, :value); (:logy, :checked); (:type, :value); (:realign, :checked); (:alignment, :value); (:roll, :value); (:popnorm, :checked); [(Symbol(t,"-",n), :value) for n in 1:max_lines for t in (:state, :county)]], [(:theplot, :figure)]))
     callback!(identity, app2, callid"type.value => cases_or_deaths.children")
     callback!(app2, callid"type.value => values.options") do type
         return [(label="Cumulative", value="values"), (label="New daily $(type)", value="diff")]

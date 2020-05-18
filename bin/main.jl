@@ -1,7 +1,7 @@
 using CovidCountyDash
 
-const df = Ref(DataFrame(state=[], county=[], cases=[], deaths=[], pop=[]))
-@async df[] = (d = download_and_preprocess(); @info "got the data"; d)
+const df = download_and_preprocess(joinpath(@__DIR__, "..", "data", "pop2019.csv"))
+@info "Got the data"
 
 handler = make_handler(create_app(df), debug = true)
 @info "Setup and now serving..."
