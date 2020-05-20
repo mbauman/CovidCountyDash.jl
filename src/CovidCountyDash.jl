@@ -91,10 +91,7 @@ function plotit(df, value, logy, type, realign, alignment, roll, popnorm, pp...)
         text = :text,
         group = :location,
         hovertemplate = "%{text}: %{y}",
-        mode = "lines+markers",
-        marker_size = 5,
-        marker_line_width = 2,
-        marker_opacity = 0.6,
+        mode = "lines",
     )
 end
 
