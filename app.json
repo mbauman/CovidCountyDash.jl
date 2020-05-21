@@ -1,0 +1,11 @@
+{
+  "name": "CovidCountyDash",
+  "description": "COVID-19 Visualized by US County",
+  "website": "https://github.com/mbauman/CovidCountyDash.jl",
+  "repository": "https://github.com/mbauman/CovidCountyDash.jl",
+  "buildpacks": [
+    {
+      "url": "https://github.com/mbauman/heroku-buildpack-julia"
+    }
+  ]
+}

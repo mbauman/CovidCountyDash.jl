@@ -30,6 +30,8 @@ This is setup to be hosted on free-tier Heroku dyno. In the free tier, the app g
 after 30 minutes of inactivity and we're given terribly anemic access to the CPU. To reduce
 startup costs, a special [heroku buildpack] that uses [PackageCompiler.jl] is under development.
 
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
+
 [data]: https://github.com/nytimes/covid-19-data
 [The New York Times]: https://www.nytimes.com/interactive/2020/us/coronavirus-us-cases.html
 [John Burn-Murdoch]: https://twitter.com/jburnmurdoch
