@@ -27,6 +27,15 @@ function download_and_preprocess(popfile)
     dd[mo .& (dd.county .== "Clay"), :pop] .-= 126460
     dd[mo .& (dd.county .== "Jackson"), :pop] .-= 315801
     dd[mo .& (dd.county .== "Platte"), :pop] .-= 49456
+
+    # # Joplin, MO
+    # Dammit NYT. "Starting June 25, cases and deaths for Joplin are reported separately from Jasper and Newton counties. The cases and deaths reported for those counties are only for the portions exclusive of Joplin. Joplin cases and deaths previously appeared in the counts for those counties or as Unknown."
+    # https://www.census.gov/quickfacts/fact/table/joplincitymissouri,US/PST045219
+    dd[mo .& (dd.county .== "Joplin"), :pop] .= 50798
+    # Very little of Joplin is in Newton; cannot find exact figures. Guess a 95/5 split?
+    dd[mo .& (dd.county .== "Jasper"), :pop] .-= 50798 * 95 ÷ 100
+    dd[mo .& (dd.county .== "Newton"), :pop] .-= 50798 *  5 ÷ 100
+
     # Set all unknown counties to 0
     dd[dd.county .== "Unknown", :pop] .= 0
     return dd
