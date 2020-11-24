@@ -68,7 +68,7 @@ function precompute(df, states, counties; type=:cases, roll=1, popnorm=false)
     vals = float.(subdf[!, type])
     dates = subdf.date
     if popnorm
-        vals .*= 100 ./ subdf.pop
+        vals .*= coalesce.(100 ./ subdf.pop, NaN)
     end
     loc = !isset(counties) ?
         (length(states) <= 2 ? join(states, " + ") : "$(states[1]) + $(length(states)-1) other states") :
