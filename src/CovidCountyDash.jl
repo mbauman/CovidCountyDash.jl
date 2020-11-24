@@ -93,7 +93,7 @@ function plotit(df, value, type, roll, checkopts, pp...)
     logy = checkopts === nothing ? false : "logy" in checkopts
     popnorm = checkopts === nothing ? false : "popnorm" in checkopts
     data = reduce(vcat, [precompute(df, state, county, type=Symbol(type), roll=roll, popnorm=popnorm) for (state, county) in Iterators.partition(pp, 2)])
-    data.text = Dates.format.(data.dates, "U d")
+    data.text = Dates.format.(data.dates, "u d")
     layout = Layout(
         xaxis_title = "Date",
         yaxis_title = value == "values" ? "Total confirmed $type" :
@@ -166,7 +166,8 @@ function create_app(df;max_lines=6)
                         options=[
                             (label="Normalize by population", value="popnorm"),
                             (label="Use logarithmic y-axis", value="logy")
-                        ])
+                        ],
+                        value=["popnorm"])
                 ])
             ]),
             html_div(style = (width="80%", display="block", margin="auto"), [
