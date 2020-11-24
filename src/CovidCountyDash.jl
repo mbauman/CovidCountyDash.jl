@@ -12,34 +12,46 @@ function download_and_preprocess(popfile)
     dd = leftjoin(d, pop, on=:fips, matchmissing=:equal)
     # # New York City
     # All cases for the five boroughs of New York City (New York, Kings, Queens, Bronx and Richmond counties) are assigned to a single area called New York City.
-    dd[(dd.state .== "New York") .& (dd.county .== "New York City"), :pop] .=
+    nyc_mask = (dd.state .== "New York") .& (dd.county .== "New York City")
+    dd[nyc_mask, :pop] .=
         sum(pop.pop[pop.fips .∈ ((36061, # New York
                                  36047, # Kings
                                  36081, # Queens
                                  36005, # Bronx
                                  13245, # Richmond
                                  ),)])
+    dd[nyc_mask, :county] .= "New York City¹"
+
     # # Kansas City, Mo
     # Four counties (Cass, Clay, Jackson and Platte) overlap the municipality of Kansas City, Mo. The cases and deaths that we show for these four counties are only for the portions exclusive of Kansas City. Cases and deaths for Kansas City are reported as their own line.
     mo = dd.state .== "Missouri"
     # 2018 estimated pop for KCMO: https://www.census.gov/quickfacts/fact/table/kansascitycitymissouri/PST045218
     dd[mo .& (dd.county .== "Kansas City"), :pop] .= 491918
+    dd[mo .& (dd.county .== "Kansas City"), :county] .= "Kansas City²"
     # subtract out 2018 estimates of KCMO from counties: https://www.marc.org/Data-Economy/Metrodataline/Population/Current-Population-Data
     dd[mo .& (dd.county .== "Cass"), :pop] .-= 201
     dd[mo .& (dd.county .== "Clay"), :pop] .-= 126460
     dd[mo .& (dd.county .== "Jackson"), :pop] .-= 315801
     dd[mo .& (dd.county .== "Platte"), :pop] .-= 49456
+    dd[mo .& (dd.county .== "Cass"), :county] .= "Cass³"
+    dd[mo .& (dd.county .== "Clay"), :county] .= "Clay³"
+    dd[mo .& (dd.county .== "Jackson"), :county] .= "Jackson³"
+    dd[mo .& (dd.county .== "Platte"), :county] .= "Platte³"
 
     # # Joplin, MO
     # Dammit NYT. "Starting June 25, cases and deaths for Joplin are reported separately from Jasper and Newton counties. The cases and deaths reported for those counties are only for the portions exclusive of Joplin. Joplin cases and deaths previously appeared in the counts for those counties or as Unknown."
     # https://www.census.gov/quickfacts/fact/table/joplincitymissouri,US/PST045219
     dd[mo .& (dd.county .== "Joplin"), :pop] .= 50798
+    dd[mo .& (dd.county .== "Joplin"), :county] .= "Joplin⁴"
     # Very little of Joplin is in Newton; cannot find exact figures. Guess a 95/5 split?
     dd[mo .& (dd.county .== "Jasper"), :pop] .-= 50798 * 95 ÷ 100
     dd[mo .& (dd.county .== "Newton"), :pop] .-= 50798 *  5 ÷ 100
+    dd[mo .& (dd.county .== "Jasper"), :county] .= "Jasper⁵"
+    dd[mo .& (dd.county .== "Newton"), :county] .= "Newton⁵"
 
     # Set all unknown counties to 0
     dd[dd.county .== "Unknown", :pop] .= 0
+
     return dd
 end
 
@@ -157,7 +169,19 @@ function create_app(df;max_lines=6)
                         ])
                 ])
             ]),
-            html_div(dcc_graph(id = "theplot", figure=Plot()), style = (width="80%", display="block", margin="auto")),
+            html_div(style = (width="80%", display="block", margin="auto"), [
+                dcc_graph(id = "theplot", figure=Plot()),
+                html_span(id="footnote¹", style=(textAlign="center", display="none", fontSize="small"),
+                    "¹ The five boroughs of New York City (New York, Kings, Queens, Bronx, and Richmond counties) are combined into a single entry."),
+                html_span(id="footnote²", style=(textAlign="center", display="none", fontSize="small"),
+                    "² Kansas City, MO is reported independently of the four counties it spans (Cass, Clay, Jackson, and Platte counties)"),
+                html_span(id="footnote³", style=(textAlign="center", display="none", fontSize="small"),
+                    "³ Excluding data from Kansas City, MO"),
+                html_span(id="footnote⁴", style=(textAlign="center", display="none", fontSize="small"),
+                    "⁴ Starting June 25, Joplin, MO is reported independently of the two counties it spans (Jasper and Newton counties)"),
+                html_span(id="footnote⁵", style=(textAlign="center", display="none", fontSize="small"),
+                    "⁵ Excluding data from Joplin, MO "),
+                ]),
             html_br(),
             html_span([html_a("Code source", href="https://github.com/mbauman/CovidCountyDash.jl"),
                 " (",  html_a("Julia", href="https://julialang.org"),
@@ -174,6 +198,16 @@ function create_app(df;max_lines=6)
     for n in 1:max_lines
         callback!(x->counties(df, x), app, Output("county-$n", "options"), Input("state-$n", "value"))
         callback!(x->nothing, app, Output("county-$n", "value"), Input("state-$n", "value"))
+    end
+    contains_footnote(x, ⁱ) = isset(x) && any(endswith.(x, ⁱ))
+    for ⁱ in "¹²³⁴⁵"
+        callback!(app, Output("footnote$ⁱ", "style"), Input.(["county-$n" for n in 1:max_lines], "value")) do counties...
+            if any(contains_footnote.(counties, ⁱ))
+                return (textAlign="center", display="block", fontSize="small")
+            else
+                return (textAlign="center", display="none", fontSize="small")
+            end
+        end
     end
     callback!((args...)->plotit(df, args...), app, Output("theplot", "figure"),
         splat(Input).([("values", "value"); ("type", "value"); ("roll", "value"); ("checkopts", "value");
