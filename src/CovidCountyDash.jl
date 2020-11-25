@@ -57,24 +57,23 @@ end
 
 # utilities to compute the cases by day, subseted and aligned
 isset(x) = x !== nothing && !isempty(x)
-rolling(f, v, n) = n == 1 ? v : [f(@view v[max(firstindex(v),i-n+1):i]) for i in eachindex(v)]
+rolling(f, v, n) = n == 1 ? v : [Float32(f(@view v[max(firstindex(v),i-n+1):i])) for i in eachindex(v)]
 function subset(df, states, counties)
     mask = isset(counties) ? (df.county .∈ (counties,)) .& (df.state .∈ (states,)) : df.state .∈ (states,)
     return combine(groupby(df[mask, :], :date), :cases=>sum, :deaths=>sum, :pop=>sum, renamecols=false)
 end
-function precompute(df, states, counties; type=:cases, roll=1, popnorm=false)
-    !isset(states) && return DataFrame(values=Int[],diff=Int[],dates=Date[],location=String[])
+const EMPTY = DataFrame(values=Float32[], popvalues=Float32[], dates=Date[],location=String[])
+function precompute(df, states, counties; type=:cases, roll=1, value="values")
+    !isset(states) && return EMPTY
     subdf = subset(df, states, counties)
-    vals = float.(subdf[!, type])
-    dates = subdf.date
-    if popnorm
-        vals .*= coalesce.(100 ./ subdf.pop, NaN)
-    end
+    vals = subdf[!, type]
+    values = value == "diff" ? [NaN32; rolling(mean, diff(vals), roll)] : vals
+    popvalues = values .* (100 / maximum(subdf.pop))
     loc = !isset(counties) ?
         (length(states) <= 2 ? join(states, " + ") : "$(states[1]) + $(length(states)-1) other states") :
         (length(counties) <= 2 ? join(counties, " + ") * ", " * states[] :
             "$(counties[1]), $(states[]) + $(length(counties)-1) other counties")
-    return DataFrame(values=vals, dates=dates, diff=[missing; rolling(mean, diff(vals), roll)], location=loc)
+    return DataFrame(values=values, popvalues=popvalues, dates=subdf.date, location=loc)
 end
 # Given a state, list its counties
 function counties(df, states)
@@ -92,8 +91,7 @@ function plotit(df, value, type, roll, checkopts, pp...)
     roll = something(roll, 1)
     logy = checkopts === nothing ? false : "logy" in checkopts
     popnorm = checkopts === nothing ? false : "popnorm" in checkopts
-    data = reduce(vcat, [precompute(df, state, county, type=Symbol(type), roll=roll, popnorm=popnorm) for (state, county) in Iterators.partition(pp, 2)])
-    data.text = Dates.format.(data.dates, "u d")
+    data = reduce(vcat, [precompute(df, state, county, type=Symbol(type), roll=roll, value=value) for (state, county) in Iterators.partition(pp, 2)])
     layout = Layout(
         xaxis_title = "Date",
         yaxis_title = value == "values" ? "Total confirmed $type" :
@@ -106,13 +104,16 @@ function plotit(df, value, type, roll, checkopts, pp...)
         yaxis_type= logy ? "log" : "linear",
         margin=(l=220,),
     )
-    isempty(data) && return Plot(data, layout)
+    isempty(data) && return Plot(data, layout, x = extrema(df.date), y = [NaN32, NaN32], mode="lines")
+    y, customdata = popnorm ? (:popvalues, :values) : (:values, :popvalues)
+    valtrace, poptrace = popnorm ? (:customdata, :y) : (:y, :customdata)
+    perday = roll > 1 && value == "diff" ? "/day" : ""
     return Plot(data, layout,
         x = :dates,
-        y = Symbol(value),
-        text = :text,
+        y = y,
+        customdata = customdata,
         group = :location,
-        hovertemplate = "%{text}: %{y}",
+        hovertemplate = "%{x|%b %d}: %{$valtrace:,.1f} $type$perday (%{$poptrace:.2g}%)",
         mode = "lines",
     )
 end
@@ -171,7 +172,7 @@ function create_app(df;max_lines=6)
                 ])
             ]),
             html_div(style = (width="80%", display="block", margin="auto"), [
-                dcc_graph(id = "theplot", figure=Plot()),
+                dcc_graph(id = "theplot", figure=plotit(df, "values", "cases", 7, ["popnorm"], [], [])),
                 html_span(id="footnote¹", style=(textAlign="center", display="none", fontSize="small"),
                     "¹ The five boroughs of New York City (New York, Kings, Queens, Bronx, and Richmond counties) are combined into a single entry."),
                 html_span(id="footnote²", style=(textAlign="center", display="none", fontSize="small"),
