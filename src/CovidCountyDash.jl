@@ -102,7 +102,7 @@ function plotit(df, value, type, roll, checkopts, pp...)
         title = string(value == "values" ? "Total " : "Daily " , "Confirmed ", uppercasefirst(type)),
         height = "40%",
         yaxis_type= logy ? "log" : "linear",
-        margin=(l=220,),
+        yaxis_automargin = true,
     )
     isempty(data) && return Plot(data, layout, x = extrema(df.date), y = [NaN32, NaN32], mode="lines")
     y, customdata = popnorm ? (:popvalues, :values) : (:values, :popvalues)
