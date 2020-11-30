@@ -51,13 +51,21 @@ function download_and_preprocess(popfile)
 
     # Set all unknown counties to 0
     dd[dd.county .== "Unknown", :pop] .= 0
+    # Except Guam, which _only_ has a single unknown county. This would be better handled by
+    # using the states CSV separately when no counties are selected.
+    isguam = dd.state .== "Guam"
+    if length(unique(dd[isguam, :county])) == 1
+        dd[isguam, :pop] .= pop[pop.fips .== 66000, :pop]
+    end
 
     return dd
 end
 
 # utilities to compute the cases by day, subseted and aligned
 isset(x) = x !== nothing && !isempty(x)
-rolling(f, v, n) = n == 1 ? v : [Float32(f(@view v[max(firstindex(v),i-n+1):i])) for i in eachindex(v)]
+f32(x) = Float32(x)
+f32(::Missing) = missing
+rolling(f, v, n) = n == 1 ? v : [f32(f(@view v[max(firstindex(v),i-n+1):i])) for i in eachindex(v)]
 function subset(df, states, counties)
     mask = isset(counties) ? (df.county .∈ (counties,)) .& (df.state .∈ (states,)) : df.state .∈ (states,)
     return combine(groupby(df[mask, :], :date), :cases=>sum, :deaths=>sum, :pop=>sum, renamecols=false)
