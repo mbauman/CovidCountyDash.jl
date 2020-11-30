@@ -29,5 +29,6 @@ const df = download_and_preprocess(joinpath(@__DIR__, "..", "data", "pop2019.csv
 
 app = create_app(df)
 @info "Setup and now serving..."
-port = something(tryparse(Int, length(ARGS) > 0 ? ARGS[1] : ""), 8080)
+# Heroku passes the port as the first argument; JuliaHub as a PORT ENV var
+port = something(tryparse(Int, length(ARGS) > 0 ? ARGS[1] : get(ENV, "PORT", "")), 8080)
 run_server(app, "0.0.0.0", port)
