@@ -29,4 +29,5 @@ const df = download_and_preprocess(joinpath(@__DIR__, "..", "data", "pop2019.csv
 
 app = create_app(df)
 @info "Setup and now serving..."
-run_server(app, "0.0.0.0", parse(Int, length(ARGS) > 0 ? ARGS[1] : "8080"))
+port = something(tryparse(Int, length(ARGS) > 0 ? ARGS[1] : ""), 8080)
+run_server(app, "0.0.0.0", port)
