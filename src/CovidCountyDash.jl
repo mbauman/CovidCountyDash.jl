@@ -2,63 +2,55 @@ module CovidCountyDash
 import HTTP, CSV
 using Dash, DashCoreComponents, DashHtmlComponents
 using DataFrames, Dates, PlotlyBase, Statistics
+using DataStructures: OrderedDict
 using Base: splat
 
 export download_and_preprocess, create_app, HTTP, DataFrame, run_server
 
-function download_and_preprocess(popfile)
-    d = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), DataFrame, normalizenames=true)
-    pop = CSV.read(popfile, DataFrame)
-    dd = leftjoin(d, pop, on=:fips, matchmissing=:equal)
-    # # New York City
-    # All cases for the five boroughs of New York City (New York, Kings, Queens, Bronx and Richmond counties) are assigned to a single area called New York City.
-    nyc_mask = (dd.state .== "New York") .& (dd.county .== "New York City")
-    dd[nyc_mask, :pop] .=
-        sum(pop.pop[pop.fips .∈ ((36061, # New York
-                                 36047, # Kings
-                                 36081, # Queens
-                                 36005, # Bronx
-                                 13245, # Richmond
-                                 ),)])
-    dd[nyc_mask, :county] .= "New York City¹"
+const POP = CSV.read(joinpath(@__DIR__, "..", "data", "pop2019.csv"), DataFrame)
+const STATES = OrderedDict(f=>s for (s, f) in eachrow(select(filter(x->ismissing(x.county), POP), :state, :fips)))
+const COUNTIES = OrderedDict(sf=>OrderedDict(cf=>c for (c, cf) in eachrow(select(filter(x->sf == x.fips÷1000, POP), :county, :fips))) for sf in keys(STATES))
 
-    # # Kansas City, Mo
-    # Four counties (Cass, Clay, Jackson and Platte) overlap the municipality of Kansas City, Mo. The cases and deaths that we show for these four counties are only for the portions exclusive of Kansas City. Cases and deaths for Kansas City are reported as their own line.
-    mo = dd.state .== "Missouri"
-    # 2018 estimated pop for KCMO: https://www.census.gov/quickfacts/fact/table/kansascitycitymissouri/PST045218
-    dd[mo .& (dd.county .== "Kansas City"), :pop] .= 491918
-    dd[mo .& (dd.county .== "Kansas City"), :county] .= "Kansas City²"
-    # subtract out 2018 estimates of KCMO from counties: https://www.marc.org/Data-Economy/Metrodataline/Population/Current-Population-Data
-    dd[mo .& (dd.county .== "Cass"), :pop] .-= 201
-    dd[mo .& (dd.county .== "Clay"), :pop] .-= 126460
-    dd[mo .& (dd.county .== "Jackson"), :pop] .-= 315801
-    dd[mo .& (dd.county .== "Platte"), :pop] .-= 49456
-    dd[mo .& (dd.county .== "Cass"), :county] .= "Cass³"
-    dd[mo .& (dd.county .== "Clay"), :county] .= "Clay³"
-    dd[mo .& (dd.county .== "Jackson"), :county] .= "Jackson³"
-    dd[mo .& (dd.county .== "Platte"), :county] .= "Platte³"
+counties(::Nothing) = []
+counties(statefips) = length(statefips) == 1 ? [(label=c, value=fips) for (fips, c) in COUNTIES[statefips[]]] : []
 
-    # # Joplin, MO
-    # Dammit NYT. "Starting June 25, cases and deaths for Joplin are reported separately from Jasper and Newton counties. The cases and deaths reported for those counties are only for the portions exclusive of Joplin. Joplin cases and deaths previously appeared in the counts for those counties or as Unknown."
-    # https://www.census.gov/quickfacts/fact/table/joplincitymissouri,US/PST045219
-    dd[mo .& (dd.county .== "Joplin"), :pop] .= 50798
-    dd[mo .& (dd.county .== "Joplin"), :county] .= "Joplin⁴"
-    # Very little of Joplin is in Newton; cannot find exact figures. Guess a 95/5 split?
-    dd[mo .& (dd.county .== "Jasper"), :pop] .-= 50798 * 95 ÷ 100
-    dd[mo .& (dd.county .== "Newton"), :pop] .-= 50798 *  5 ÷ 100
-    dd[mo .& (dd.county .== "Jasper"), :county] .= "Jasper⁵"
-    dd[mo .& (dd.county .== "Newton"), :county] .= "Newton⁵"
+const SHORTSTATE = Dict(
+     1 => "AL",  2 => "AK",  4 => "AZ",  5 => "AR",  6 => "CA",  8 => "CO",  9 => "CT",
+    10 => "DE", 11 => "DC", 12 => "FL", 13 => "GA", 15 => "HI", 16 => "ID", 17 => "IL",
+    18 => "IN", 19 => "IA", 20 => "KS", 21 => "KY", 22 => "LA", 23 => "ME", 24 => "MD",
+    25 => "MA", 26 => "MI", 27 => "MN", 28 => "MS", 29 => "MO", 30 => "MT", 31 => "NE",
+    32 => "NV", 33 => "NH", 34 => "NJ", 35 => "NM", 36 => "NY", 37 => "NC", 38 => "ND",
+    39 => "OH", 40 => "OK", 41 => "OR", 42 => "PA", 44 => "RI", 45 => "SC", 46 => "SD",
+    47 => "TN", 48 => "TX", 49 => "UT", 50 => "VT", 51 => "VA", 53 => "WA", 54 => "WV",
+    55 => "WI", 56 => "WY", 66 => "GU", 69 => "MP", 72 => "PR", 78 => "VI", )
 
-    # Set all unknown counties to 0
-    dd[dd.county .== "Unknown", :pop] .= 0
-    # Except Guam, which _only_ has a single unknown county. This would be better handled by
-    # using the states CSV separately when no counties are selected.
-    isguam = dd.state .== "Guam"
-    if length(unique(dd[isguam, :county])) == 1
-        dd[isguam, :pop] .= pop[pop.fips .== 66000, :pop]
-    end
+labelname(::Nothing) = nothing
+labelname(fips) = fips < 1000 ? SHORTSTATE[fips] : COUNTIES[fips ÷ 1000][fips]
 
-    return dd
+function download_and_preprocess()
+    counties = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), DataFrame, normalizenames=true)
+    states = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv").body)), DataFrame, normalizenames=true)
+    states[!, :county] .= missing
+    d = transform!(vcat(counties, states),
+        [:state, :county, :fips]=>ByRow() do state, county, fips
+            if ismissing(fips)
+                if state == "New York" && county == "New York City"
+                    36998
+                elseif state == "Missouri" && county == "Kansas City"
+                    29998
+                elseif state == "Missouri" && county == "Joplin"
+                    29997
+                elseif county == "Unknown"
+                    POP[(POP.state .== state) .& ismissing.(POP.county), :fips][]*1000+999
+                else
+                    @warn "Missing fips for $county, $state"
+                    fips
+                end
+            else
+                fips
+            end
+        end => :fips)
+    return sort!(d, [:fips, :date])
 end
 
 # utilities to compute the cases by day, subseted and aligned
@@ -67,32 +59,24 @@ f32(x) = Float32(x)
 f32(::Missing) = missing
 rolling(f, v, n) = n == 1 ? v : [f32(f(@view v[max(firstindex(v),i-n+1):i])) for i in eachindex(v)]
 function subset(df, states, counties)
-    mask = isset(counties) ? (df.county .∈ (counties,)) .& (df.state .∈ (states,)) : df.state .∈ (states,)
-    return combine(groupby(df[mask, :], :date), :cases=>sum, :deaths=>sum, :pop=>sum, renamecols=false)
+    f = x->isset(counties) ? x.fips ∈ counties : x.fips ∈ states
+    subset = sort!(combine(groupby(filter(f, df; view=true), :date), :cases=>sum, :deaths=>sum, renamecols=false), :date)
+    return subset, sum(filter(f, POP; view=true).pop)
 end
 const EMPTY = DataFrame(values=Float32[], popvalues=Float32[], dates=Date[],location=String[])
 function precompute(df, states, counties; type=:cases, roll=1, value="values")
     !isset(states) && return EMPTY
-    subdf = subset(df, states, counties)
+    subdf, pop = subset(df, states, counties)
+    isempty(subdf) && return EMPTY
     vals = subdf[!, type]
     values = value == "diff" ? [NaN32; rolling(mean, diff(vals), roll)] : vals
-    popvalues = values .* (100 / maximum(subdf.pop))
-    loc = !isset(counties) ?
-        (length(states) <= 2 ? join(states, " + ") : "$(states[1]) + $(length(states)-1) other states") :
-        (length(counties) <= 2 ? join(counties, " + ") * ", " * states[] :
-            "$(counties[1]), $(states[]) + $(length(counties)-1) other counties")
+    popvalues = values .* (100 / pop)
+    loc = isset(counties) ?
+        (length(counties) <= 2 ? join(labelname.(counties), " + ") * ", " * labelname(states[]) :
+            "$(labelname(counties[1])), $(labelname(states[])) + $(length(counties)-1) other counties") :
+        (length(states) <= 2 ? join(labelname.(states), " + ") :
+            "$(labelname(states[1])) + $(length(states)-1) other states")
     return DataFrame(values=values, popvalues=popvalues, dates=subdf.date, location=loc)
-end
-# Given a state, list its counties
-function counties(df, states)
-    !isset(states) && return NamedTuple{(:label, :value),Tuple{String,String}}[]
-    if length(states) == 1
-        [(label=c, value=c) for c in sort!(unique(df[df.state .== states[1], :county]))]
-    else
-        # We don't keep the state/county pairings straight so disable it
-        # [(label="$c, $s", value=c) for s in states for c in sort!(unique(df[df.state .== s, :county]))]
-        NamedTuple{(:label, :value),Tuple{String,String}}[]
-    end
 end
 # put together the plot given a sequence of alternating state/county pairs
 function plotit(df, value, type, roll, checkopts, pp...)
@@ -125,9 +109,7 @@ function plotit(df, value, type, roll, checkopts, pp...)
         mode = "lines",
     )
 end
-
 function create_app(df;max_lines=6)
-    states = sort!(unique(df.state))
     app = dash(external_stylesheets=["https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"])
     app.title = "🦠 COVID-19 Tracked by US County"
     app.layout =
@@ -147,7 +129,7 @@ function create_app(df;max_lines=6)
                     html_table(style=(width="100%",),
                         vcat(html_tr([html_th("State",style=(width="40%",)),
                                       html_th("County",style=(width="60%",))]),
-                             [html_tr([html_td(dcc_dropdown(id="state-$n", options=[(label=s, value=s) for s in states], multi=true), style=(width="40%",)),
+                             [html_tr([html_td(dcc_dropdown(id="state-$n", options=[(label=s, value=f) for (f, s) in STATES], multi=true), style=(width="40%",)),
                                       html_td(dcc_dropdown(id="county-$n", options=[], multi=true), style=(width="60%",))], id="scrow-$n")
                               for n in 1:max_lines])
                     )
@@ -206,10 +188,10 @@ function create_app(df;max_lines=6)
         callback!(hide_missing_row, app, Output("scrow-$n", "style"), [Input("state-$n", "value"), Input("state-$(n-1)", "value")])
     end
     for n in 1:max_lines
-        callback!(x->counties(df, x), app, Output("county-$n", "options"), Input("state-$n", "value"))
+        callback!(counties, app, Output("county-$n", "options"), Input("state-$n", "value"))
         callback!(x->nothing, app, Output("county-$n", "value"), Input("state-$n", "value"))
     end
-    contains_footnote(x, ⁱ) = isset(x) && any(endswith.(x, ⁱ))
+    contains_footnote(fips, ⁱ) = isset(fips) && any(endswith.(labelname.(fips), ⁱ))
     for ⁱ in "¹²³⁴⁵"
         callback!(app, Output("footnote$ⁱ", "style"), Input.(["county-$n" for n in 1:max_lines], "value")) do counties...
             if any(contains_footnote.(counties, ⁱ))
@@ -235,4 +217,5 @@ function create_app(df;max_lines=6)
     end
     return app
 end
+
 end
