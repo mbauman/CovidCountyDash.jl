@@ -12,7 +12,7 @@ const STATES = OrderedDict(f=>s for (s, f) in eachrow(select(filter(x->ismissing
 const COUNTIES = OrderedDict(sf=>OrderedDict(cf=>c for (c, cf) in eachrow(select(filter(x->sf == x.fips÷1000, POP), :county, :fips))) for sf in keys(STATES))
 
 counties(::Nothing) = []
-counties(statefips) = length(statefips) == 1 ? [(label=c, value=fips) for (fips, c) in COUNTIES[statefips[]]] : []
+counties(statefips) = length(statefips) == 1 && haskey(COUNTIES, statefips[]) ? [(label=c, value=fips) for (fips, c) in COUNTIES[statefips[]]] : []
 
 const SHORTSTATE = Dict(
      1 => "AL",  2 => "AK",  4 => "AZ",  5 => "AR",  6 => "CA",  8 => "CO",  9 => "CT",
@@ -58,25 +58,25 @@ isset(x) = x !== nothing && !isempty(x)
 f32(x) = Float32(x)
 f32(::Missing) = missing
 rolling(f, v, n) = n == 1 ? v : [f32(f(@view v[max(firstindex(v),i-n+1):i])) for i in eachindex(v)]
-function subset(df, states, counties)
-    f = x->isset(counties) ? x.fips ∈ counties : x.fips ∈ states
-    subset = sort!(combine(groupby(filter(f, df; view=true), :date), :cases=>sum, :deaths=>sum, renamecols=false), :date)
-    return subset, sum(filter(f, POP; view=true).pop)
+function subset(df, fips)
+    subset = combine(groupby(filter(:fips=>∈(fips), df; view=true), :date, sort=true), :cases=>sum, :deaths=>sum, renamecols=false)
+    return subset, sum(filter(:fips=>∈(fips), POP; view=true).pop)
 end
 const EMPTY = DataFrame(values=Float32[], popvalues=Float32[], dates=Date[],location=String[])
 function precompute(df, states, counties; type=:cases, roll=1, value="values")
     !isset(states) && return EMPTY
-    subdf, pop = subset(df, states, counties)
+    fips = BitSet(isset(counties) ? counties : states)
+    subdf, pop = subset(df, fips)
     isempty(subdf) && return EMPTY
     vals = subdf[!, type]
     values = value == "diff" ? [NaN32; rolling(mean, diff(vals), roll)] : vals
-    popvalues = values .* (100 / pop)
+    popvalues = values .* Float32(100 / coalesce(pop, NaN32))
     loc = isset(counties) ?
-        (length(counties) <= 2 ? join(labelname.(counties), " + ") * ", " * labelname(states[]) :
-            "$(labelname(counties[1])), $(labelname(states[])) + $(length(counties)-1) other counties") :
-        (length(states) <= 2 ? join(labelname.(states), " + ") :
-            "$(labelname(states[1])) + $(length(states)-1) other states")
-    return DataFrame(values=values, popvalues=popvalues, dates=subdf.date, location=loc)
+        (length(counties) <= 2 ? join(labelname.(counties), " + ") * ", " * labelname(states[1]) :
+            "$(labelname(counties[1])), $(labelname(states[1])) + $(length(counties)-1) other counties") :
+        (length(states) <= 4 ? join(labelname.(states), " + ") :
+            "$(join(labelname.(states[1:3]), " + ")) + $(length(states)-3) other states")
+    return DataFrame(values=values, popvalues=Float64.(popvalues), dates=subdf.date, location=loc)
 end
 # put together the plot given a sequence of alternating state/county pairs
 function plotit(df, value, type, roll, checkopts, pp...)
@@ -129,12 +129,16 @@ function create_app(df;max_lines=6)
                     html_table(style=(width="100%",),
                         vcat(html_tr([html_th("State",style=(width="40%",)),
                                       html_th("County",style=(width="60%",))]),
-                             [html_tr([html_td(dcc_dropdown(id="state-$n", options=[(label=s, value=f) for (f, s) in STATES], multi=true), style=(width="40%",)),
-                                      html_td(dcc_dropdown(id="county-$n", options=[], multi=true), style=(width="60%",))], id="scrow-$n")
-                              for n in 1:max_lines])
+                             [html_tr([
+                                 html_td(dcc_dropdown(id="state-$n", options=
+                                     [(label=s, value=f) for (f, s) in STATES], multi=true,
+                                     placeholder="Select or right click..."), style=(width="40%",)),
+                                 html_td(dcc_dropdown(id="county-$n", options=[], multi=true,
+                                     placeholder="Select or right click..."), style=(width="60%",))
+                                 ], id="scrow-$n") for n in 1:max_lines])
                     )
                 ),
-                html_div(className="col-4", [
+                html_div(className="col-4", contextMenu="menu", [
                     html_b("Options"),
                     dcc_radioitems(id="type", labelStyle=(display="block",),
                         options=[
@@ -180,16 +184,95 @@ function create_app(df;max_lines=6)
                 " + ", html_a("Plotly Dash", href="https://plotly.com/dash/"),
                 " + ", html_a("Dash.jl", href="https://juliahub.com/ui/Packages/Dash/oXkBb"),
                 ")"],
-                style=(textAlign = "center", display = "block"))
+                style=(textAlign = "center", display = "block")),
+            html_div([
+                [html_div(id="menu-state-$n", className="menu", style=(display="none", zIndex=100, position="absolute", border="1px solid", boxShadow="4px 3px 8px 1px #969696"), [
+                    html_button("All States & Territories", style=(width="100%",), id="all-$n"), html_br(),
+                    html_button("Contiguous 48 States + DC", style=(width="100%",), id="lower49-$n"),
+                    html_button("Northeast", style=(width="100%",), id="northeast-$n"),
+                    html_button("Midwest", style=(width="100%",), id="midwest-$n"),
+                    html_button("South", style=(width="100%",), id="south-$n"),
+                    html_button("West", style=(width="100%",), id="west-$n"),
+                ]) for n in 1:max_lines];
+                [html_div(id="menu-county-$n", className="menu", style=(display="none", zIndex=100, position="absolute", border="1px solid", boxShadow="4px 3px 8px 1px #969696", backgroundColor="#e0e0e0"), [
+                    html_p("Population percentile:", style=(width="100%",padding="0 8em 0 8em")), html_br(),
+                    dcc_rangeslider(id="popslider-$n", className="popslider", min=0, max=100, step=.5, value=[90,100], marks=Dict((0:10:100) .=> string.(0:10:100, "%"))),
+                    html_button("Apply", id="apply-pop-$n", style=(width="100%",))
+                ]) for n in 1:max_lines]]),
+            dcc_interval(id="jsloader", interval=1),
         ])
 
+    callback!("""
+        function (n) {
+            if (typeof n === 'undefined' || typeof document.getElementById('state-1') == 'undefined') { return false; };
+            $(["document.getElementById('state-$n').addEventListener('contextmenu',function(event){
+                event.preventDefault();
+                var menu = document.getElementById('menu-state-$n');
+                menu.style.display = 'block';
+                menu.style.left = (event.pageX - 10)+'px';
+                menu.style.top = (event.pageY - 10)+'px';
+                return false;
+            },false);" for n in 1:max_lines]...)
+            $(["document.getElementById('county-$n').addEventListener('contextmenu',function(event){
+                event.preventDefault();
+                var menu = document.getElementById('menu-county-$n');
+                menu.style.display = 'block';
+                menu.style.left = (event.pageX - 10)+'px';
+                menu.style.top = (event.pageY - 10)+'px';
+                return false;
+            },false);" for n in 1:max_lines]...)
+            document.addEventListener("click",function(event){
+                var menus = document.getElementsByClassName("menu");
+                for (let i = 0; i < menus.length; i++) {
+                    if (menus[i].contains(event.target) && !event.target.matches("button")) { return false; }
+                    menus[i].style.display = "none";
+                    menus[i].style.left = "";
+                    menus[i].style.top = "";
+                }
+                return false;
+            },false);
+            return true;
+        }""", app, Output("jsloader", "disabled"), Input("jsloader", "n_intervals"))
+    for n in 1:max_lines
+        callback!(app, Output("state-$n", "value"), Input.(["all-$n", "lower49-$n", "northeast-$n", "midwest-$n", "south-$n", "west-$n"], "n_clicks")) do buttons...
+            all(isnothing, buttons) && return []
+            changed_id = get([p.prop_id for p in callback_context().triggered], 1, "")
+            if startswith(changed_id, "all")
+                return keys(STATES)
+            elseif startswith(changed_id, "lower49")
+                return setdiff(keys(STATES), [2, 15, 66, 69, 72, 78])
+            elseif startswith(changed_id, "northeast")
+                return [9, 23, 25, 33, 34, 36, 42, 44, 50]
+            elseif startswith(changed_id, "midwest")
+                return [17, 18, 19, 20, 26, 27, 29, 31, 38, 39, 46, 55]
+            elseif startswith(changed_id, "south")
+                return [1, 5, 10, 11, 12, 13, 21, 22, 24, 28, 37, 40, 45, 47, 48, 51, 54]
+            elseif startswith(changed_id, "west")
+                return [4, 6, 8, 16, 30, 32, 35, 41, 49, 53, 56]
+            else
+                return Dash.NoUpdate()
+            end
+        end
+    end
+    for n in 1:max_lines
+        callback!(app, Output("county-$n", "value"), [Input("popslider-$n", "value"), Input("apply-pop-$n", "n_clicks"), Input("county-$n", "options")]) do slider, click, opts
+            (isnothing(click) || isempty(opts)) && return []
+            changed_id = get([p.prop_id for p in callback_context().triggered], 1, "")
+            if startswith(changed_id, "apply")
+                pops = filter(:fips=>∈(BitSet(getproperty.(opts, :value))), POP)
+                lower, upper = quantile(skipmissing(pops.pop), sort(slider)./100)
+                return pops.fips[coalesce.(lower .<= pops.pop .<= upper, false)]
+            else
+                return Dash.NoUpdate()
+            end
+        end
+    end
     hide_missing_row(s, c) = !isset(s) && !isset(c) ? (display="none",) : (display="table-row",)
     for n in 2:max_lines
         callback!(hide_missing_row, app, Output("scrow-$n", "style"), [Input("state-$n", "value"), Input("state-$(n-1)", "value")])
     end
     for n in 1:max_lines
         callback!(counties, app, Output("county-$n", "options"), Input("state-$n", "value"))
-        callback!(x->nothing, app, Output("county-$n", "value"), Input("state-$n", "value"))
     end
     contains_footnote(fips, ⁱ) = isset(fips) && any(endswith.(labelname.(fips), ⁱ))
     for ⁱ in "¹²³⁴⁵"
@@ -204,7 +287,6 @@ function create_app(df;max_lines=6)
     callback!((args...)->plotit(df, args...), app, Output("theplot", "figure"),
         splat(Input).([("values", "value"); ("type", "value"); ("roll", "value"); ("checkopts", "value");
                 [("$t-$n", "value") for n in 1:max_lines for t in (:state, :county)]]))
-    callback!(identity, app, Output("cases_or_deaths","children"), Input("type","value"))
     callback!(app, Output("values","options"), Input("type","value")) do type
         return [(label="Cumulative", value="values"), (label="New daily $(type)", value="diff")]
     end

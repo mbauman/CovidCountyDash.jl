@@ -1,5 +1,6 @@
 using CovidCountyDash
 
+@info "fetching the data"
 df = download_and_preprocess()
 @info "Got the data"
 
