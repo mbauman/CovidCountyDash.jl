@@ -12,7 +12,11 @@ const STATES = OrderedDict(f=>s for (s, f) in eachrow(select(filter(x->ismissing
 const COUNTIES = OrderedDict(sf=>OrderedDict(cf=>c for (c, cf) in eachrow(select(filter(x->sf == x.fips÷1000, POP), :county, :fips))) for sf in keys(STATES))
 
 counties(::Nothing) = []
-counties(statefips) = length(statefips) == 1 && haskey(COUNTIES, statefips[]) ? [(label=c, value=fips) for (fips, c) in COUNTIES[statefips[]]] : []
+counties(statefips) = if length(statefips) == 1
+    [(label=c, value=fips) for s in statefips for (fips, c) in get(COUNTIES, s, [])]
+else
+    [(label=string(c, ", ", SHORTSTATE[s]), value=fips) for s in statefips for (fips, c) in get(COUNTIES, s, [])]
+end
 
 const SHORTSTATE = Dict(
      1 => "AL",  2 => "AK",  4 => "AZ",  5 => "AR",  6 => "CA",  8 => "CO",  9 => "CT",
@@ -26,6 +30,51 @@ const SHORTSTATE = Dict(
 
 labelname(::Nothing) = nothing
 labelname(fips) = fips < 1000 ? SHORTSTATE[fips] : COUNTIES[fips ÷ 1000][fips]
+
+function label(fips)
+    locs = String[]
+    samestate = all(>=(1000), fips) && length(unique(fips .÷ 1000)) == 1
+    if all(<(1000), fips)
+        # only states; look for a subgroup
+        if length(fips) >= minimum(length, values(STATE_GROUPS))
+            for (name, group) in STATE_GROUPS
+                if group ⊆ fips
+                    push!(locs, uppercasefirst(name))
+                    fips = setdiff(fips, group)
+                end
+            end
+        end
+        append!(locs, labelname.(fips))
+    elseif all(>=(1000), fips)
+        append!(locs, samestate ? labelname.(fips) : labelname.(fips) .* ", " .* labelname.(fips .÷ 1000))
+    else
+        return "Strange mix of states and counties"
+    end
+    b = IOBuffer()
+    cur_len = write(b, locs[1])
+    didbreak = false
+    for i in 2:length(locs)
+        remaining_len = mapreduce(length, +, locs[i+1:end], init=0) + (length(locs)-i+1)*3
+        cutoff_txt = " + $(length(locs)-i+1) others"
+        if cur_len + length(cutoff_txt) > 40 && cur_len + remaining_len > cur_len + length(cutoff_txt)
+            print(b, cutoff_txt)
+            didbreak = true
+            break
+        end
+        cur_len += write(b, " + ", locs[i])
+    end
+    samestate && print(b, didbreak ? " in " : ", ", labelname(first(fips) ÷ 1000))
+    return String(take!(b))
+end
+
+const STATE_GROUPS = OrderedDict{String, Vector{Int}}(
+    "all" => sort!(collect(keys(STATES))),
+    "lower49" => sort!(collect(setdiff(keys(STATES), [2, 15, 66, 69, 72, 78]))),
+    "northeast" => [9, 23, 25, 33, 34, 36, 42, 44, 50],
+    "midwest" => [17, 18, 19, 20, 26, 27, 29, 31, 38, 39, 46, 55],
+    "south" => [1, 5, 10, 11, 12, 13, 21, 22, 24, 28, 37, 40, 45, 47, 48, 51, 54],
+    "west" => [4, 6, 8, 16, 30, 32, 35, 41, 49, 53, 56],
+    )
 
 function download_and_preprocess()
     counties = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), DataFrame, normalizenames=true)
@@ -69,14 +118,10 @@ function precompute(df, states, counties; type=:cases, roll=1, value="values")
     subdf, pop = subset(df, fips)
     isempty(subdf) && return EMPTY
     vals = subdf[!, type]
-    values = value == "diff" ? [NaN32; rolling(mean, diff(vals), roll)] : vals
+    values = Float32.(coalesce.(value == "diff" ? [NaN32; rolling(mean, diff(vals), roll)] : vals, NaN32))
     popvalues = values .* Float32(100 / coalesce(pop, NaN32))
-    loc = isset(counties) ?
-        (length(counties) <= 2 ? join(labelname.(counties), " + ") * ", " * labelname(states[1]) :
-            "$(labelname(counties[1])), $(labelname(states[1])) + $(length(counties)-1) other counties") :
-        (length(states) <= 4 ? join(labelname.(states), " + ") :
-            "$(join(labelname.(states[1:3]), " + ")) + $(length(states)-3) other states")
-    return DataFrame(values=values, popvalues=Float64.(popvalues), dates=subdf.date, location=loc)
+    loc = label(fips)
+    return DataFrame(values=values, popvalues=popvalues, dates=subdf.date, location=loc)
 end
 # put together the plot given a sequence of alternating state/county pairs
 function plotit(df, value, type, roll, checkopts, pp...)
@@ -93,10 +138,11 @@ function plotit(df, value, type, roll, checkopts, pp...)
         hovermode = "closest",
         title = string(value == "values" ? "Total " : "Daily " , "Confirmed ", uppercasefirst(type)),
         height = "40%",
+        showlegend = true,
         yaxis_type= logy ? "log" : "linear",
         yaxis_automargin = true,
     )
-    isempty(data) && return Plot(data, layout, x = extrema(df.date), y = [NaN32, NaN32], mode="lines")
+    isempty(data) && return Plot(collect(extrema(df.date)), [NaN32, NaN32], layout, mode="lines", name="", showlegend=false)
     y, customdata = popnorm ? (:popvalues, :values) : (:values, :popvalues)
     valtrace, poptrace = popnorm ? (:customdata, :y) : (:y, :customdata)
     perday = roll > 1 && value == "diff" ? "/day" : ""
@@ -105,7 +151,7 @@ function plotit(df, value, type, roll, checkopts, pp...)
         y = y,
         customdata = customdata,
         group = :location,
-        hovertemplate = "%{x|%b %d}: %{$valtrace:,.1f} $type$perday (%{$poptrace:.2g}%)",
+        hovertemplate = "%{x|%b %d}: %{$valtrace:,$(roll == 1 || value == "values" ? "d" : ".1f")} $type$perday (%{$poptrace:.2g}%)",
         mode = "lines",
     )
 end
@@ -165,7 +211,7 @@ function create_app(df;max_lines=6)
                         value=["popnorm"])
                 ])
             ]),
-            html_div(style = (width="80%", display="block", margin="auto"), [
+            html_div(style = (display="block", margin="0 5% 0 10%"), [
                 dcc_graph(id = "theplot", figure=plotit(df, "values", "cases", 7, ["popnorm"], [], [])),
                 html_span(id="footnote¹", style=(textAlign="center", display="none", fontSize="small"),
                     "¹ The five boroughs of New York City (New York, Kings, Queens, Bronx, and Richmond counties) are combined into a single entry."),
@@ -237,21 +283,7 @@ function create_app(df;max_lines=6)
         callback!(app, Output("state-$n", "value"), Input.(["all-$n", "lower49-$n", "northeast-$n", "midwest-$n", "south-$n", "west-$n"], "n_clicks")) do buttons...
             all(isnothing, buttons) && return []
             changed_id = get([p.prop_id for p in callback_context().triggered], 1, "")
-            if startswith(changed_id, "all")
-                return keys(STATES)
-            elseif startswith(changed_id, "lower49")
-                return setdiff(keys(STATES), [2, 15, 66, 69, 72, 78])
-            elseif startswith(changed_id, "northeast")
-                return [9, 23, 25, 33, 34, 36, 42, 44, 50]
-            elseif startswith(changed_id, "midwest")
-                return [17, 18, 19, 20, 26, 27, 29, 31, 38, 39, 46, 55]
-            elseif startswith(changed_id, "south")
-                return [1, 5, 10, 11, 12, 13, 21, 22, 24, 28, 37, 40, 45, 47, 48, 51, 54]
-            elseif startswith(changed_id, "west")
-                return [4, 6, 8, 16, 30, 32, 35, 41, 49, 53, 56]
-            else
-                return Dash.NoUpdate()
-            end
+            return get(STATE_GROUPS, split(changed_id, '-')[1], Dash.NoUpdate())
         end
     end
     for n in 1:max_lines
