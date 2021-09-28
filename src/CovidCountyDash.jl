@@ -26,7 +26,7 @@ const SHORTSTATE = Dict(
     32 => "NV", 33 => "NH", 34 => "NJ", 35 => "NM", 36 => "NY", 37 => "NC", 38 => "ND",
     39 => "OH", 40 => "OK", 41 => "OR", 42 => "PA", 44 => "RI", 45 => "SC", 46 => "SD",
     47 => "TN", 48 => "TX", 49 => "UT", 50 => "VT", 51 => "VA", 53 => "WA", 54 => "WV",
-    55 => "WI", 56 => "WY", 66 => "GU", 69 => "MP", 72 => "PR", 78 => "VI", )
+    55 => "WI", 56 => "WY", 60 => "AS", 66 => "GU", 69 => "MP", 72 => "PR", 78 => "VI", )
 
 labelname(::Nothing) = nothing
 labelname(fips) = fips < 1000 ? SHORTSTATE[fips] : COUNTIES[fips ÷ 1000][fips]

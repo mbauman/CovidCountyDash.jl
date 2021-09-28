@@ -50,6 +50,7 @@ fips,pop,state,county
 54,1792147,West Virginia,
 55,5822434,Wisconsin,
 56,578759,Wyoming,
+60,46366,American Samoa,
 66,168485,Guam,
 69,52263,Northern Mariana Islands,
 72,3193694,Puerto Rico,
@@ -3245,6 +3246,7 @@ fips,pop,state,county
 56043,7805,Wyoming,Washakie
 56045,6927,Wyoming,Weston
 56999,,Wyoming,Unknown
+60999,,American Samoa,Unknown
 66999,,Guam,Unknown
 69100,2072,Northern Mariana Islands,Rota
 69110,47565,Northern Mariana Islands,Saipan
