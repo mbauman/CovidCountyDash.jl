@@ -69,6 +69,9 @@ append!(pop, DataFrame(
 # Guam is a July 2020 estimate from the CIA: https://www.cia.gov/library/publications/the-world-factbook/geos/gq.html
 push!(pop, (fips=66, pop=168485, state="Guam", county=missing))
 
+# American Samoa is a July 2021 estimate from the CIA: https://www.cia.gov/the-world-factbook/countries/american-samoa/
+push!(pop, (fips=60, pop=46366, state="American Samoa", county=missing))
+
 # Northern Mariana Islands have 2017 estimates via this crazy HTML/js table
 # https://commerce.gov.mp/lfp-2017-population-characteristics-introduction/
 append!(pop, DataFrame(
