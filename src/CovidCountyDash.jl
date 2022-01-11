@@ -69,7 +69,7 @@ end
 
 const STATE_GROUPS = OrderedDict{String, Vector{Int}}(
     "all" => sort!(collect(keys(STATES))),
-    "lower49" => sort!(collect(setdiff(keys(STATES), [2, 15, 66, 69, 72, 78]))),
+    "lower49" => sort!(collect(filter(<(60), setdiff(keys(STATES), (2, 15))))),
     "northeast" => [9, 23, 25, 33, 34, 36, 42, 44, 50],
     "midwest" => [17, 18, 19, 20, 26, 27, 29, 31, 38, 39, 46, 55],
     "south" => [1, 5, 10, 11, 12, 13, 21, 22, 24, 28, 37, 40, 45, 47, 48, 51, 54],
