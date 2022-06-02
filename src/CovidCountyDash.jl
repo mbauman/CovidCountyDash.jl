@@ -76,11 +76,14 @@ const STATE_GROUPS = OrderedDict{String, Vector{Int}}(
     "west" => [4, 6, 8, 16, 30, 32, 35, 41, 49, 53, 56],
     )
 
+const YEARS = ["2020", "2021", "2022"]
+const URIBASE = "https://raw.githubusercontent.com/nytimes/covid-19-data/master"
 function download_and_preprocess()
-    counties = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv").body)), DataFrame, normalizenames=true)
-    states = CSV.read(IOBuffer(String(HTTP.get("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv").body)), DataFrame, normalizenames=true)
+    states = CSV.read(IOBuffer(String(HTTP.get(URIBASE * "/us-states.csv").body)), DataFrame, normalizenames=true)
     states[!, :county] .= missing
-    d = transform!(vcat(counties, states),
+    county_yrs = [CSV.read(IOBuffer(String(HTTP.get(URIBASE * "/us-counties-" * year * ".csv").body)), DataFrame, normalizenames=true)
+                    for year in YEARS]
+    d = transform!(vcat(states, county_yrs...),
         [:state, :county, :fips]=>ByRow() do state, county, fips
             if ismissing(fips)
                 if state == "New York" && county == "New York City"
