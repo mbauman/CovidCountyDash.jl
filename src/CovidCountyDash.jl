@@ -162,7 +162,7 @@ function create_app(df;max_lines=6)
     app = dash(external_stylesheets=["https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"])
     app.title = "🦠 COVID-19 Tracked by US County"
     app.layout =
-        html_div(style=(padding="2%",), [
+        html_div(style=(padding="2% 5% 0% 5%",), [
             html_h1("🦠 COVID-19 Tracked by US County", style=(textAlign = "center",)),
             html_div(style=(width="60%",margin="auto", textAlign="center"), [
                 "Visualization of ",
@@ -173,8 +173,11 @@ function create_app(df;max_lines=6)
                 html_p("Loaded data through $(Dates.format(maximum(df.date), "U d"))",
                     style=(height="2rem", lineHeight="2rem",margin="0")),
                 ]),
+            html_div(style = (display="block", margin="0 5% 0 5%"), [
+                dcc_graph(id = "theplot", figure=plotit(df, "values", "cases", 7, ["popnorm"], [], [])),
+                ]),
             html_div(className="row", [
-                html_div(className="col-8",
+                html_div(className="col-9",
                     html_table(style=(width="100%",),
                         vcat(html_tr([html_th("State",style=(width="40%",)),
                                       html_th("County",style=(width="60%",))]),
@@ -187,7 +190,7 @@ function create_app(df;max_lines=6)
                                  ], id="scrow-$n") for n in 1:max_lines])
                     )
                 ),
-                html_div(className="col-4", contextMenu="menu", [
+                html_div(className="col-3", contextMenu="menu", [
                     html_b("Options"),
                     dcc_radioitems(id="type", labelStyle=(display="block",),
                         options=[
@@ -214,8 +217,7 @@ function create_app(df;max_lines=6)
                         value=["popnorm"])
                 ])
             ]),
-            html_div(style = (display="block", margin="0 5% 0 10%"), [
-                dcc_graph(id = "theplot", figure=plotit(df, "values", "cases", 7, ["popnorm"], [], [])),
+            html_div(style = (display="block", margin="0 5% 0 5%"), [
                 html_span(id="footnote¹", style=(textAlign="center", display="none", fontSize="small"),
                     "¹ The five boroughs of New York City (New York, Kings, Queens, Bronx, and Richmond counties) are combined into a single entry."),
                 html_span(id="footnote²", style=(textAlign="center", display="none", fontSize="small"),
