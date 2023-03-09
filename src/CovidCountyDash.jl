@@ -76,7 +76,7 @@ const STATE_GROUPS = OrderedDict{String, Vector{Int}}(
     "west" => [4, 6, 8, 16, 30, 32, 35, 41, 49, 53, 56],
     )
 
-const YEARS = ["2020", "2021", "2022"]
+const YEARS = ["2020", "2021", "2022", "2023"]
 const URIBASE = "https://raw.githubusercontent.com/nytimes/covid-19-data/master"
 function download_and_preprocess()
     states = CSV.read(IOBuffer(String(HTTP.get(URIBASE * "/us-states.csv").body)), DataFrame, normalizenames=true)
