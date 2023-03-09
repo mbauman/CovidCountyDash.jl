@@ -1,6 +1,6 @@
 module CovidCountyDash
 import HTTP, CSV
-using Dash, DashCoreComponents, DashHtmlComponents
+using Dash
 using DataFrames, Dates, PlotlyBase, Statistics
 using DataStructures: OrderedDict
 using Base: splat
@@ -124,7 +124,7 @@ function precompute(df, states, counties; type=:cases, roll=1, value="values")
     values = Float32.(coalesce.(value == "diff" ? [NaN32; rolling(mean, diff(vals), roll)] : vals, NaN32))
     popvalues = values .* Float32(100 / coalesce(pop, NaN32))
     loc = label(fips)
-    return DataFrame(values=values, popvalues=popvalues, dates=subdf.date, location=loc)
+    return DataFrame(values=replace(values, NaN=>nothing), popvalues=replace(popvalues, NaN=>nothing), dates=subdf.date, location=loc)
 end
 # put together the plot given a sequence of alternating state/county pairs
 function plotit(df, value, type, roll, checkopts, pp...)
@@ -145,7 +145,7 @@ function plotit(df, value, type, roll, checkopts, pp...)
         yaxis_type= logy ? "log" : "linear",
         yaxis_automargin = true,
     )
-    isempty(data) && return Plot(collect(extrema(df.date)), [NaN32, NaN32], layout, mode="lines", name="", showlegend=false)
+    isempty(data) && return Plot(collect(extrema(df.date)), [nothing, nothing], layout, mode="lines", name="", showlegend=false)
     y, customdata = popnorm ? (:popvalues, :values) : (:values, :popvalues)
     valtrace, poptrace = popnorm ? (:customdata, :y) : (:y, :customdata)
     perday = roll > 1 && value == "diff" ? "/day" : ""
