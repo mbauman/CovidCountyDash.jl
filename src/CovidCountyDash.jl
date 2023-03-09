@@ -69,7 +69,8 @@ end
 
 const STATE_GROUPS = OrderedDict{String, Vector{Int}}(
     "all" => sort!(collect(keys(STATES))),
-    "lower49" => sort!(collect(filter(<(60), setdiff(keys(STATES), (2, 15))))),
+    "the50" => sort!(collect(filter(<(60), setdiff(keys(STATES), (11,))))),
+    "contiguous" => sort!(collect(filter(<(60), setdiff(keys(STATES), (2, 15))))),
     "northeast" => [9, 23, 25, 33, 34, 36, 42, 44, 50],
     "midwest" => [17, 18, 19, 20, 26, 27, 29, 31, 38, 39, 46, 55],
     "south" => [1, 5, 10, 11, 12, 13, 21, 22, 24, 28, 37, 40, 45, 47, 48, 51, 54],
@@ -239,7 +240,7 @@ function create_app(df;max_lines=6)
             html_div([
                 [html_div(id="menu-state-$n", className="menu", style=(display="none", zIndex=100, position="absolute", border="1px solid", boxShadow="4px 3px 8px 1px #969696"), [
                     html_button("All States & Territories", style=(width="100%",), id="all-$n"), html_br(),
-                    html_button("Contiguous 48 States + DC", style=(width="100%",), id="lower49-$n"),
+                    html_button("Contiguous 48 States + DC", style=(width="100%",), id="contiguous-$n"),
                     html_button("Northeast", style=(width="100%",), id="northeast-$n"),
                     html_button("Midwest", style=(width="100%",), id="midwest-$n"),
                     html_button("South", style=(width="100%",), id="south-$n"),
@@ -285,7 +286,7 @@ function create_app(df;max_lines=6)
             return true;
         }""", app, Output("jsloader", "disabled"), Input("jsloader", "n_intervals"))
     for n in 1:max_lines
-        callback!(app, Output("state-$n", "value"), Input.(["all-$n", "lower49-$n", "northeast-$n", "midwest-$n", "south-$n", "west-$n"], "n_clicks")) do buttons...
+        callback!(app, Output("state-$n", "value"), Input.(["all-$n", "contiguous-$n", "northeast-$n", "midwest-$n", "south-$n", "west-$n"], "n_clicks")) do buttons...
             all(isnothing, buttons) && return []
             changed_id = get([p.prop_id for p in callback_context().triggered], 1, "")
             return get(STATE_GROUPS, split(changed_id, '-')[1], Dash.NoUpdate())
