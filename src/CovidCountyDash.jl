@@ -69,7 +69,7 @@ end
 
 const STATE_GROUPS = OrderedDict{String, Vector{Int}}(
     "all" => sort!(collect(keys(STATES))),
-    "the50" => sort!(collect(filter(<(60), setdiff(keys(STATES), (11,))))),
+    "states" => sort!(collect(filter(<(60), setdiff(keys(STATES), (11,))))),
     "contiguous" => sort!(collect(filter(<(60), setdiff(keys(STATES), (2, 15))))),
     "northeast" => [9, 23, 25, 33, 34, 36, 42, 44, 50],
     "midwest" => [17, 18, 19, 20, 26, 27, 29, 31, 38, 39, 46, 55],
@@ -183,12 +183,14 @@ function create_app(df;max_lines=6)
                         vcat(html_tr([html_th("State",style=(width="40%",)),
                                       html_th("County",style=(width="60%",))]),
                              [html_tr([
-                                 html_td(dcc_dropdown(id="state-$n", options=
-                                     [(label=s, value=f) for (f, s) in STATES], multi=true,
-                                     placeholder="Select or right click..."), style=(width="40%",)),
-                                 html_td(dcc_dropdown(id="county-$n", options=[], multi=true,
-                                     placeholder="Select or right click..."), style=(width="60%",))
-                                 ], id="scrow-$n") for n in 1:max_lines])
+                                 html_td(dcc_dropdown(id="state-$n",
+                                        options=[(label=s, value=f) for (f, s) in STATES],
+                                        value=n == 1 ? keys(filter(kv->kv[1]<60, STATES)) : [],
+                                        multi=true, placeholder="Select or right click..."),
+                                    style=(width="40%",)),
+                                html_td(dcc_dropdown(id="county-$n", options=[], multi=true,
+                                        placeholder="Select or right click..."), style=(width="60%",))
+                                ], id="scrow-$n") for n in 1:max_lines])
                     )
                 ),
                 html_div(className="col-3", contextMenu="menu", [
@@ -287,7 +289,8 @@ function create_app(df;max_lines=6)
         }""", app, Output("jsloader", "disabled"), Input("jsloader", "n_intervals"))
     for n in 1:max_lines
         callback!(app, Output("state-$n", "value"), Input.(["all-$n", "contiguous-$n", "northeast-$n", "midwest-$n", "south-$n", "west-$n"], "n_clicks")) do buttons...
-            all(isnothing, buttons) && return []
+            # preserve the initial state of the first input but explicitly set all others to fire the dynamic hiding code
+            all(isnothing, buttons) && return n == 1 ? Dash.NoUpdate() : []
             changed_id = get([p.prop_id for p in callback_context().triggered], 1, "")
             return get(STATE_GROUPS, split(changed_id, '-')[1], Dash.NoUpdate())
         end
