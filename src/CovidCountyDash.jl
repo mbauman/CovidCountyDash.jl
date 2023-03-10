@@ -7,7 +7,7 @@ using Base: splat
 
 export download_and_preprocess, create_app, HTTP, DataFrame, run_server
 
-const POP = CSV.read(joinpath(@__DIR__, "..", "data", "pop2019.csv"), DataFrame)
+const POP = CSV.read(joinpath(@__DIR__, "..", "data", "pop2020.csv"), DataFrame)
 const STATES = OrderedDict(f=>s for (s, f) in eachrow(select(filter(x->ismissing(x.county), POP), :state, :fips)))
 const COUNTIES = OrderedDict(sf=>OrderedDict(cf=>c for (c, cf) in eachrow(select(filter(x->sf == x.fips÷1000, POP), :county, :fips))) for sf in keys(STATES))
 
