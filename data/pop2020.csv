@@ -127,8 +127,6 @@ fips,pop,state,county
 2016,5206,Alaska,Aleutians West Census Area
 2020,290637,Alaska,Anchorage Municipality
 2050,18648,Alaska,Bethel Census Area
-2063,7073,Alaska,Chugach Census Area
-2066,2616,Alaska,Copper River Census Area
 2068,1611,Alaska,Denali Borough
 2070,4839,Alaska,Dillingham Census Area
 2090,95286,Alaska,Fairbanks North Star Borough
@@ -147,6 +145,7 @@ fips,pop,state,county
 2220,8428,Alaska,Sitka City and Borough
 2230,1239,Alaska,Skagway Municipality
 2240,6831,Alaska,Southeast Fairbanks Census Area
+2261,9689,Alaska,Valdez-Cordova Census Area
 2275,2130,Alaska,Wrangell City and Borough
 2290,5300,Alaska,Yukon-Koyukuk Census Area
 2997,2285,Alaska,Bristol Bay plus Lake and Peninsula

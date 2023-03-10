@@ -51,7 +51,7 @@ push!(pop, (fips=2997, pop=sum(pop[pop.fips .∈ [[2060, 2164]], :pop]),
 push!(pop, (fips=2998, pop=sum(pop[pop.fips .∈ [[2282, 2105]], :pop]),
     state= "Alaska", county="Yakutat plus Hoonah-Angoon"))
 # Chugach (2063) and Copper River Census Areas (2066), using thier former combined name and fips
-push!(pop, (fips=2261, pop=sum(pop[pop.fips .∈ [[2063, 2066]]], :pop]),
+push!(pop, (fips=2261, pop=sum(pop[pop.fips .∈ [[2063, 2066]], :pop]),
     state= "Alaska", county="Valdez-Cordova Census Area"))
 delete!(pop, findall(pop.fips .∈ [[2060, 2164, 2282, 2105, 2063, 2066]]))
 
@@ -61,7 +61,7 @@ prdata = DataFrame(XLSX.gettable(XLSX.readxlsx(prxlsx)[1], "A:D", first_row=4, i
 idxs = findall(endswith("Puerto Rico"), prdata[:, 1])
 prdata = prdata[idxs, [1, 3]]
 transform!(prdata, :missing=>(x->replace.(x, r"(^\.| Municipio, Puerto Rico$)"=>""))=>:county)
-prfips = CSV.read("prfips.csv", DataFrame)
+prfips = CSV.read(joinpath(@__DIR__, "prfips.csv"), DataFrame)
 prpops = leftjoin(prdata, prfips, on=:county)
 @assert !any(ismissing.(prpops.fips))
 append!(pop, select(prpops,
@@ -99,4 +99,4 @@ for row in eachrow(filter(x->ismissing(x.county), pop))
     push!(pop, (fips=row.fips*1000+999, pop=missing, state=row.state, county="Unknown"))
 end
 
-CSV.write("pop2020.csv", sort(pop))
+CSV.write(joinpath(@__DIR__, "pop2020.csv"), sort(pop))
