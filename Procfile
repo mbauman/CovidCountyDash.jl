@@ -1,1 +1,1 @@
-web: julia --project bin/main.jl $PORT
+web: App/bin/CovidCountyDash $PORT
