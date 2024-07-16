@@ -171,7 +171,7 @@ function create_app(df;max_lines=6)
                 " from ",
                 html_a("The New York Times", href="https://www.nytimes.com/interactive/2020/us/coronavirus-us-cases.html"),
                 ", based on reports from state and local health agencies",
-                html_p("Loaded data through $(Dates.format(maximum(df.date), "U d"))",
+                html_p("Loaded data through $(Dates.format(maximum(df.date), "U d, Y"))",
                     style=(height="2rem", lineHeight="2rem",margin="0")),
                 ]),
             html_div(style = (display="block", margin="0 5% 0 5%"), [

@@ -8,6 +8,8 @@ version in the history (like [2633d5b]) for a simpler example.
 
 ## Data
 
+As of March 24, 2023, the NYT has [unfortunately stopped](https://www.nytimes.com/2023/03/22/us/covid-data-cdc.html) updating this dataset.
+
 Note the geographical [caveats in the NYT dataset]; the most annoying of which are the fact
 that the 5 NYC boroughs are all lumped together and Joplin and Kansas City, MO report thier numbers
 separately of counties they span.  Further, note that US territories and the District
